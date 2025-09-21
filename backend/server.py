@@ -200,6 +200,11 @@ async def get_issues(status: Optional[str] = None, category: Optional[str] = Non
     # Get issues from database
     issues = await db.issues.find(query).to_list(1000)
     
+    # Remove MongoDB ObjectId from results
+    for issue in issues:
+        if '_id' in issue:
+            del issue['_id']
+    
     # If no issues found, return mock data for demo
     if not issues:
         mock_issues = [
