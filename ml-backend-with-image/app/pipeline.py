@@ -1,13 +1,28 @@
 from app import storage, dataset
 from app import image_classifier as ic
+import re
 
 # Profanity detection
+import warnings
+# Suppress pkg_resources deprecation warnings globally (they're just warnings, not errors)
+warnings.filterwarnings("ignore", category=UserWarning, message=".*pkg_resources.*")
+
+PROFANITY_AVAILABLE = False
+_profanity_predict = None
 try:
-    import profanity_check
-    PROFANITY_AVAILABLE = True
+    from profanity_check import predict as _profanity_predict
+    # Test that it works with a known profane word
+    _test_result = _profanity_predict(["fuck"])
+    # Check if result is valid (should be numpy array or list with 1)
+    if _test_result is not None:
+        PROFANITY_AVAILABLE = True
 except ImportError:
+    # Library truly not installed
+    pass  # Silently fall back to keyword-based detection
+except Exception as e:
+    # Any other import/runtime error - silently fall back
     PROFANITY_AVAILABLE = False
-    print("Warning: profanity-check library not available. Install with: pip install profanity-check")
+    _profanity_predict = None
 
 # Category-scoped urgent keywords (same methodology as CATEGORY_KEYWORDS)
 # Keep a Global bucket to preserve previous behavior while enabling per-category tuning
@@ -63,13 +78,55 @@ def classify_report(report: dict):
     desc_lower = desc.lower()
     cat = (report.get("category") or "").strip()
 
-    # 1. Reject if abusive (using profanity-check library)
-    if PROFANITY_AVAILABLE:
-        is_profane = profanity_check.predict([desc])[0] == 1
-    else:
-        # Fallback to simple keyword check if profanity-check not available
-        fallback_bad_words = {"fuck", "shit", "bitch", "bastard", "asshole", "dick", "cunt", "prick", "slut", "whore"}
-        is_profane = any(word in desc_lower for word in fallback_bad_words)
+    # 1. Reject if abusive (using profanity-check library + keyword matching)
+    # Comprehensive keyword list for abusive language detection
+    # This is the PRIMARY detection method - ML model is secondary
+    fallback_bad_words = {
+        "fuck", "fucking", "fucked", "fucker", "fuckin", "fucks",
+        "shit", "shitting", "shitted", "shitty", "shits",
+        "bitch", "bitches", "bitching", "bitched",
+        "bastard", "bastards",
+        "asshole", "ass", "asses", "assholes",
+        "dick", "dicks", "dickhead",
+        "cunt", "cunts",
+        "prick", "pricks",
+        "slut", "sluts","bloody",
+        "whore", "whores","rascal",
+        "damn", "damned", "damnit", "dammit",
+        "hell", "hells",
+        "crap", "crappy",
+        "piss", "pissed", "pissing",
+        "idiot", "idiots", "idiotic",
+        "stupid", "stupidity", "stupidly",
+        "moron", "morons",
+        "retard", "retarded",
+        "gay", "gays",  # Context-dependent, but often used abusively
+        "hate", "hateful", "hating"
+    }
+    
+    # ALWAYS check keywords first (most reliable)
+    # Check if any profane word appears in the description (case-insensitive substring match)
+    is_profane_keywords = any(word in desc_lower for word in fallback_bad_words)
+    
+    # Also try ML model if available
+    is_profane_ml = False
+    if PROFANITY_AVAILABLE and _profanity_predict is not None:
+        try:
+            # profanity_check.predict returns a numpy array with 1 for profane, 0 for clean
+            predictions = _profanity_predict([desc])
+            # Handle numpy array, list, or scalar returns
+            if hasattr(predictions, '__getitem__') and len(predictions) > 0:
+                is_profane_ml = bool(int(predictions[0]) == 1)
+            elif hasattr(predictions, 'item'):
+                is_profane_ml = bool(int(predictions.item()) == 1)
+            else:
+                is_profane_ml = bool(int(predictions) == 1)
+        except Exception:
+            # If profanity_check fails at runtime, just use keyword check
+            pass
+    
+    # Reject if EITHER detection method finds profanity
+    is_profane = is_profane_keywords or is_profane_ml
     
     if is_profane:
         result = {

@@ -53,18 +53,36 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('combined'));
 }
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', limiter);
+// Rate limiting (configurable and disabled in development unless forced on)
+const enableRateLimit = (process.env.ENABLE_RATE_LIMIT ?? 'true') !== 'false' && process.env.NODE_ENV !== 'development';
+
+if (enableRateLimit) {
+  // General limiter for all API routes
+  const limiter = rateLimit({
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000, // default: 15 minutes
+    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 500, // default: 500 requests per window per IP
+    message: {
+      success: false,
+      message: 'Too many requests from this IP, please try again later.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api/', limiter);
+
+  // Stricter limiter for OTP endpoints to avoid SMS/OTP abuse while keeping general traffic freer
+  const otpLimiter = rateLimit({
+    windowMs: parseInt(process.env.OTP_RATE_LIMIT_WINDOW_MS, 10) || 10 * 60 * 1000, // default: 10 minutes
+    max: parseInt(process.env.OTP_RATE_LIMIT_MAX, 10) || 10, // default: 10 OTP requests per window per IP
+    message: {
+      success: false,
+      message: 'Too many OTP requests, please try again later.'
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api/auth/send-otp', otpLimiter);
+}
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
