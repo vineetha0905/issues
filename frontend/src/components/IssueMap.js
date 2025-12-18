@@ -183,47 +183,6 @@ const IssueMap = ({ issues = null, onMarkerClick = null, center = null, showCent
     }
   };
 
-  if (isLoadingLocation) {
-    return (
-      <div className="map-container" style={{ 
-        height: '100%', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: '#f8fafc',
-        borderRadius: '8px'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>📍</div>
-          <p style={{ color: '#64748b', fontSize: '0.9rem' }}>Getting your location...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (locationError) {
-    return (
-      <div className="map-container" style={{ 
-        height: '100%', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        background: '#f8fafc',
-        borderRadius: '8px'
-      }}>
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚠️</div>
-          <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
-            {locationError}
-          </p>
-          <p style={{ color: '#94a3b8', fontSize: '0.8rem' }}>
-            Showing default location with nearby issues
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="map-container">
       <MapContainer
