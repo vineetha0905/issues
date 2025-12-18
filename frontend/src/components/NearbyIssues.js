@@ -299,21 +299,33 @@ const NearbyIssues = ({ user }) => {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      'reported': { class: 'status-reported', text: 'Reported' },
-      'in-progress': { class: 'status-in-progress', text: 'In Progress' },
-      'resolved': { class: 'status-resolved', text: 'Resolved' }
+      'reported': { bg: '#fef2f2', color: '#dc2626', text: 'REPORTED' },
+      'in-progress': { bg: '#fef3c7', color: '#d97706', text: 'IN PROGRESS' },
+      'resolved': { bg: '#d1fae5', color: '#059669', text: 'RESOLVED' }
     };
     
     const config = statusConfig[status] || statusConfig['reported'];
-    return <span className={`status-badge ${config.class}`}>{config.text}</span>;
+    return (
+      <span style={{
+        background: config.bg,
+        color: config.color,
+        padding: '0.25rem 0.625rem',
+        borderRadius: '12px',
+        fontSize: '0.75rem',
+        fontWeight: '600',
+        letterSpacing: '0.025em'
+      }}>
+        {config.text}
+      </span>
+    );
   };
 
   const getPriorityBadge = (priority) => {
     const priorityConfig = {
       'urgent': { bg: '#fee2e2', color: '#dc2626', text: 'URGENT', fontWeight: '700' },
-      'high': { bg: '#fef2f2', color: '#dc2626', text: 'High Priority' },
-      'medium': { bg: '#fef3c7', color: '#d97706', text: 'Medium Priority' },
-      'low': { bg: '#f0f9ff', color: '#2563eb', text: 'Low Priority' }
+      'high': { bg: '#fef2f2', color: '#dc2626', text: 'High Priority', fontWeight: '500' },
+      'medium': { bg: '#fef3c7', color: '#d97706', text: 'Medium Priority', fontWeight: '500' },
+      'low': { bg: '#f0f9ff', color: '#2563eb', text: 'Low Priority', fontWeight: '500' }
     };
     
     const config = priorityConfig[priority] || priorityConfig['medium'];
@@ -321,11 +333,10 @@ const NearbyIssues = ({ user }) => {
       <span style={{
         background: config.bg,
         color: config.color,
-        padding: '0.2rem 0.6rem',
+        padding: '0.25rem 0.625rem',
         borderRadius: '12px',
-        fontSize: '0.7rem',
-        fontWeight: config.fontWeight || '500',
-        marginLeft: '0.5rem'
+        fontSize: '0.75rem',
+        fontWeight: config.fontWeight || '500'
       }}>
         {config.text}
       </span>
@@ -359,7 +370,7 @@ const NearbyIssues = ({ user }) => {
   };
 
   return (
-    <div className="form-container" style={{ padding: '0' }}>
+    <div className="form-container nearby-issues-container" style={{ padding: '0' }}>
       <style>
         {`
           @keyframes spin {
@@ -370,15 +381,15 @@ const NearbyIssues = ({ user }) => {
       </style>
       
       {/* Header */}
-      <div style={{ 
+      <div className="nearby-issues-header" style={{ 
         background: 'white',
-        padding: '1rem 2rem',
+        padding: '1rem 1.5rem',
         borderBottom: '1px solid #e2e8f0',
         position: 'sticky',
         top: 0,
         zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <button 
               onClick={() => navigate('/citizen')}
@@ -387,33 +398,36 @@ const NearbyIssues = ({ user }) => {
                 border: 'none', 
                 color: '#1e4359', 
                 cursor: 'pointer',
-                marginRight: '1rem'
+                marginRight: '0.75rem',
+                padding: '0.25rem',
+                display: 'flex',
+                alignItems: 'center'
               }}
             >
               <ArrowLeft size={20} />
             </button>
             <h1 style={{ 
-              fontSize: '1.3rem', 
+              fontSize: '1.25rem', 
               fontWeight: '700', 
               color: '#1e293b',
               margin: 0
             }}>
-              {t('nearbyIssues')}
+              Nearby Issues
             </h1>
           </div>
 
-          {/* View Toggle and Refresh */}
+          {/* View Toggle, Refresh, and Issue Count */}
           <div style={{ 
             display: 'flex', 
             alignItems: 'center',
-            gap: '1rem'
+            gap: '0.75rem'
           }}>
             <button
               onClick={fetchIssues}
               disabled={loading}
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'transparent',
+                border: 'none',
                 padding: '0.5rem',
                 borderRadius: '8px',
                 cursor: loading ? 'not-allowed' : 'pointer',
@@ -424,9 +438,8 @@ const NearbyIssues = ({ user }) => {
               }}
               title="Refresh issues"
             >
-              <RefreshCw size={16} style={{ 
-                animation: loading ? 'spin 1s linear infinite' : 'none',
-                transform: loading ? 'rotate(0deg)' : 'none'
+              <RefreshCw size={18} style={{ 
+                animation: loading ? 'spin 1s linear infinite' : 'none'
               }} />
             </button>
             
@@ -434,23 +447,25 @@ const NearbyIssues = ({ user }) => {
               display: 'flex', 
               background: '#f1f5f9',
               borderRadius: '8px',
-              padding: '0.25rem'
+              padding: '0.25rem',
+              gap: '0.25rem'
             }}>
               <button
                 onClick={() => setViewMode('map')}
                 style={{
                   background: viewMode === 'map' ? 'white' : 'transparent',
                   border: 'none',
-                  padding: '0.5rem 0.8rem',
+                  padding: '0.5rem 0.75rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem',
+                  gap: '0.4rem',
                   color: viewMode === 'map' ? '#1e4359' : '#64748b',
-                  fontSize: '0.9rem',
+                  fontSize: '0.875rem',
                   fontWeight: '500',
-                  boxShadow: viewMode === 'map' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                  boxShadow: viewMode === 'map' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s'
                 }}
               >
                 <Map size={16} />
@@ -461,98 +476,79 @@ const NearbyIssues = ({ user }) => {
                 style={{
                   background: viewMode === 'list' ? 'white' : 'transparent',
                   border: 'none',
-                  padding: '0.5rem 0.8rem',
+                  padding: '0.5rem 0.75rem',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem',
+                  gap: '0.4rem',
                   color: viewMode === 'list' ? '#1e4359' : '#64748b',
-                  fontSize: '0.9rem',
+                  fontSize: '0.875rem',
                   fontWeight: '500',
-                  boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+                  boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                  transition: 'all 0.2s'
                 }}
               >
                 <List size={16} />
                 List
               </button>
             </div>
+            
+            <span style={{ 
+              color: '#64748b', 
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              marginLeft: '0.25rem'
+            }}>
+              {filteredIssues.length} issues
+            </span>
           </div>
         </div>
 
         {/* Status Filter */}
         <div style={{ 
           display: 'flex', 
-          alignItems: 'center',
           gap: '0.5rem',
-          marginTop: '1rem'
+          marginBottom: '0.75rem',
+          flexWrap: 'wrap'
         }}>
-          <Filter size={16} color="#64748b" />
-          <div style={{ 
-            display: 'flex', 
-            gap: '0.5rem',
-            flex: 1
-          }}>
-            {[
-              { key: 'all', label: 'All Issues', count: filterByRadius(issues, radiusKm).length },
-              { key: 'reported', label: 'Reported', count: filterByRadius(issues.filter(i => i.status === 'reported'), radiusKm).length },
-              { key: 'in-progress', label: 'In Progress', count: filterByRadius(issues.filter(i => i.status === 'in-progress'), radiusKm).length },
-              { key: 'resolved', label: 'Resolved', count: filterByRadius(issues.filter(i => i.status === 'resolved'), radiusKm).length }
-            ].map(filter => (
-              <button
-                key={filter.key}
-                onClick={() => setSelectedStatus(filter.key)}
-                style={{
-                  background: selectedStatus === filter.key ? '#1e4359' : '#f8fafc',
-                  color: selectedStatus === filter.key ? 'white' : '#64748b',
-                  border: '1px solid #e2e8f0',
-                  padding: '0.4rem 0.8rem',
-                  borderRadius: '20px',
-                  fontSize: '0.8rem',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-              >
-                {filter.label} ({filter.count})
-              </button>
-            ))}
-          </div>
+          {[
+            { key: 'all', label: 'All Issues', count: filterByRadius(issues, radiusKm).length },
+            { key: 'reported', label: 'Reported', count: filterByRadius(issues.filter(i => i.status === 'reported'), radiusKm).length },
+            { key: 'in-progress', label: 'In Progress', count: filterByRadius(issues.filter(i => i.status === 'in-progress'), radiusKm).length },
+            { key: 'resolved', label: 'Resolved', count: filterByRadius(issues.filter(i => i.status === 'resolved'), radiusKm).length }
+          ].map(filter => (
+            <button
+              key={filter.key}
+              onClick={() => setSelectedStatus(filter.key)}
+              style={{
+                background: selectedStatus === filter.key ? '#3b82f6' : '#f1f5f9',
+                color: selectedStatus === filter.key ? 'white' : '#64748b',
+                border: 'none',
+                padding: '0.5rem 0.875rem',
+                borderRadius: '20px',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {filter.label} ({filter.count})
+            </button>
+          ))}
         </div>
 
-        {/* Geolocation prompt and radius slider */}
-        {geoStatus !== 'granted' && (
-          <div style={{ 
-            background: '#fff7ed', 
-            border: '1px solid #fed7aa', 
-            color: '#9a3412', 
-            padding: '10px', 
-            borderRadius: '8px', 
-            marginTop: '10px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.9rem' }}>
-                {geoStatus === 'requesting' ? 'Requesting your location…' :
-                 geoStatus === 'denied' ? 'Location permission denied. Please allow access to show nearby issues.' :
-                 geoStatus === 'error' ? (geoError || 'Unable to determine your location.') :
-                 'We use your location to show nearby issues.'}
-              </span>
-              <button onClick={requestLocation} style={{
-                background: '#fb923c', color: 'white', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer'
-              }}>
-                Use my location
-              </button>
-            </div>
-            {geoStatus === 'denied' && (
-              <div style={{ marginTop: '6px', fontSize: '0.8rem' }}>
-                Tip: In your browser address bar, click the location icon and allow access for this site.
-              </div>
-            )}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '10px' }}>
-          <span style={{ color: '#475569', fontSize: '0.9rem' }}>Radius: {radiusKm} km</span>
+        {/* Radius slider */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '0.75rem',
+          marginBottom: '0.5rem'
+        }}>
+          <span style={{ color: '#475569', fontSize: '0.875rem', fontWeight: '500', whiteSpace: 'nowrap' }}>
+            Radius: {radiusKm} km
+          </span>
           <input 
             type="range" 
             min="1" 
@@ -560,109 +556,285 @@ const NearbyIssues = ({ user }) => {
             step="1" 
             value={radiusKm} 
             onChange={(e) => setRadiusKm(Number(e.target.value))}
-            style={{ flex: 1 }}
+            style={{ 
+              flex: 1,
+              height: '6px',
+              borderRadius: '3px',
+              background: '#e2e8f0',
+              outline: 'none'
+            }}
           />
-          <span style={{ color: '#475569', fontSize: '0.9rem' }}>{filteredIssues.length} issues</span>
+          <span style={{ color: '#475569', fontSize: '0.875rem', fontWeight: '500', whiteSpace: 'nowrap' }}>
+            {filteredIssues.length} issues
+          </span>
         </div>
+
+        {/* Geolocation prompt */}
+        {geoStatus !== 'granted' && (
+          <div style={{ 
+            background: '#fff7ed', 
+            border: '1px solid #fed7aa', 
+            color: '#9a3412', 
+            padding: '0.75rem', 
+            borderRadius: '8px', 
+            marginTop: '0.75rem',
+            fontSize: '0.875rem'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span style={{ flex: 1, minWidth: '200px' }}>
+                {geoStatus === 'requesting' ? 'Requesting your location…' :
+                 geoStatus === 'denied' ? 'Location permission denied. Please allow access to show nearby issues.' :
+                 geoStatus === 'error' ? (geoError || 'Unable to determine your location.') :
+                 'We use your location to show nearby issues.'}
+              </span>
+              <button onClick={requestLocation} style={{
+                background: '#fb923c', 
+                color: 'white', 
+                border: 'none', 
+                padding: '0.5rem 0.875rem', 
+                borderRadius: '6px', 
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                whiteSpace: 'nowrap'
+              }}>
+                Use my location
+              </button>
+            </div>
+            {geoStatus === 'denied' && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
+                Tip: In your browser address bar, click the location icon and allow access for this site.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Content */}
       {viewMode === 'map' ? (
-        <IssueMap
-          issues={filteredIssues}
-          onMarkerClick={handleMarkerClick}
-          center={userCenter || [16.0716, 77.9053]}
-        />
+        <div className="nearby-issues-map-container" style={{ 
+          width: '100%', 
+          height: 'calc(100vh - 220px)',
+          minHeight: '500px',
+          position: 'relative',
+          zIndex: 1,
+          background: '#f8fafc'
+        }}>
+          <IssueMap
+            issues={filteredIssues}
+            onMarkerClick={handleMarkerClick}
+            center={userCenter || [16.0716, 77.9053]}
+            showCenterMarker={true}
+          />
+        </div>
       ) : (
-        <div style={{ padding: '1rem 2rem' }}>
-          <div className="issues-grid" style={{ gridTemplateColumns: '1fr' }}>
-            {filteredIssues.map((issue) => (
-              <div 
-                key={issue.id} 
-                className="issue-card"
-                onClick={() => navigate(`/issue/${issue.id}`)}
-              >
-                <div className="issue-header">
-                  <div>
-                    <h3 className="issue-title">{issue.title}</h3>
-                    <div className="issue-location">
-                      <MapPin size={12} style={{ display: 'inline', marginRight: '0.3rem' }} />
-                      {issue.location}
-                    </div>
-                    <div style={{ 
-                      fontSize: '0.8rem', 
-                      color: '#94a3b8',
-                      marginTop: '0.3rem'
+        <div className="nearby-issues-list" style={{ padding: '1rem 1.5rem', background: '#f8fafc', minHeight: 'calc(100vh - 200px)' }}>
+          <div className="nearby-issues-list-content" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '100%' }}>
+            {filteredIssues.map((issue) => {
+              const imageUrl = getImageUrl(issue);
+              const [lat, lng] = issue.coordinates || [];
+              return (
+                <div 
+                  key={issue.id} 
+                  className="nearby-issue-card"
+                  style={{
+                    background: 'white',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    border: '1px solid #e2e8f0'
+                  }}
+                  onClick={() => navigate(`/issue/${issue.id}`)}
+                  onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)'}
+                  onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'}
+                >
+                  {/* Title and Status Badges */}
+                  <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'flex-start',
+                    marginBottom: '0.75rem',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem'
+                  }}>
+                    <h3 style={{ 
+                      fontSize: '1.1rem', 
+                      fontWeight: '600', 
+                      color: '#1e293b',
+                      margin: 0,
+                      flex: 1,
+                      minWidth: '200px'
                     }}>
-                      {formatDate(issue.timestamp)} • Category: {issue.category}
+                      {issue.title}
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {getStatusBadge(issue.status)}
+                      {getPriorityBadge(issue.priority)}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    {getStatusBadge(issue.status)}
-                    {getPriorityBadge(issue.priority)}
+
+                  {/* Location and Date */}
+                  <div style={{ 
+                    fontSize: '0.875rem', 
+                    color: '#64748b',
+                    marginBottom: '0.5rem',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '0.5rem',
+                    alignItems: 'center'
+                  }}>
+                    {lat && lng && (
+                      <span>
+                        Lat: {lat.toFixed(4)}, Lng: {lng.toFixed(4)}
+                      </span>
+                    )}
+                    <span>•</span>
+                    <span>
+                      {formatDate(issue.timestamp)} - Category: {issue.category || 'General'}
+                    </span>
+                  </div>
+
+                  {/* Description */}
+                  <div style={{ 
+                    color: '#475569', 
+                    fontSize: '0.9rem',
+                    lineHeight: '1.5',
+                    marginBottom: '0.75rem'
+                  }}>
+                    {issue.description}
+                  </div>
+
+                  {/* Image */}
+                  {imageUrl && (
+                    <div style={{ 
+                      background: '#f8fafc', 
+                      borderRadius: '8px', 
+                      overflow: 'hidden',
+                      height: '200px',
+                      width: '100%',
+                      marginBottom: '0.75rem',
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center'
+                    }}>
+                      <img 
+                        src={imageUrl}
+                        alt={issue.title || 'Issue image'}
+                        style={{ 
+                          width: '100%', 
+                          height: '100%', 
+                          objectFit: 'cover', 
+                          display: 'block' 
+                        }}
+                        onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div style={{ 
+                    display: 'flex', 
+                    gap: '0.5rem',
+                    justifyContent: 'flex-end',
+                    flexWrap: 'wrap'
+                  }}>
+                    {imageUrl && (
+                      <button 
+                        style={{
+                          background: '#f1f5f9',
+                          border: '1px solid #e2e8f0',
+                          color: '#64748b',
+                          padding: '0.5rem 0.875rem',
+                          borderRadius: '8px',
+                          fontSize: '0.875rem',
+                          fontWeight: '500',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          transition: 'all 0.2s'
+                        }}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setPreviewUrl(imageUrl); 
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#e2e8f0';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#f1f5f9';
+                        }}
+                      >
+                        View Image
+                      </button>
+                    )}
+                    <button 
+                      style={{
+                        background: upvotedIssues.has(issue.id) ? '#3b82f6' : '#f1f5f9',
+                        border: '1px solid #e2e8f0',
+                        color: upvotedIssues.has(issue.id) ? 'white' : '#64748b',
+                        padding: '0.5rem 0.875rem',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        transition: 'all 0.2s'
+                      }}
+                      onClick={(e) => handleUpvote(issue.id, e)}
+                      onMouseEnter={(e) => {
+                        if (!upvotedIssues.has(issue.id)) {
+                          e.currentTarget.style.background = '#e2e8f0';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!upvotedIssues.has(issue.id)) {
+                          e.currentTarget.style.background = '#f1f5f9';
+                        }
+                      }}
+                    >
+                      <ThumbsUp size={16} />
+                      {issue.upvotes + (upvotedIssues.has(issue.id) ? 1 : 0)}
+                    </button>
+                    
+                    <button 
+                      style={{
+                        background: '#f1f5f9',
+                        border: '1px solid #e2e8f0',
+                        color: '#64748b',
+                        padding: '0.5rem 0.875rem',
+                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        transition: 'all 0.2s'
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info('Comment functionality coming soon!');
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#e2e8f0';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f1f5f9';
+                      }}
+                    >
+                      <MessageCircle size={16} />
+                      Comment
+                    </button>
                   </div>
                 </div>
-
-                <div className="issue-description">
-                  {issue.description}
-                </div>
-
-                <div className="issue-actions">
-                  {(() => {
-                    const imageUrl = getImageUrl(issue);
-                    return imageUrl ? (
-                      <div style={{ 
-                        background: '#f8fafc', 
-                        borderRadius: '8px', 
-                        overflow: 'hidden',
-                        height: '160px',
-                        width: '100%',
-                        marginBottom: '8px',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                      }}>
-                        <img 
-                          src={imageUrl}
-                          alt={issue.title || 'Issue image'}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                          onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
-                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      </div>
-                    ) : null;
-                  })()}
-                  {(() => {
-                    const imageUrl = getImageUrl(issue);
-                    return imageUrl ? (
-                    <button 
-                      className="upvote-btn"
-                      onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
-                    >
-                      View Image
-                    </button>
-                  ) : null;
-                  })()}
-                  <button 
-                    className={`upvote-btn ${upvotedIssues.has(issue.id) ? 'upvoted' : ''}`}
-                    onClick={(e) => handleUpvote(issue.id, e)}
-                  >
-                    <ThumbsUp size={14} />
-                    {issue.upvotes + (upvotedIssues.has(issue.id) ? 1 : 0)}
-                  </button>
-                  
-                  <button 
-                    className="upvote-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Mock comment functionality
-                      toast.info('Comment functionality coming soon!');
-                    }}
-                  >
-                    <MessageCircle size={14} />
-                    Comment
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {filteredIssues.length === 0 && (
