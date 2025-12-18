@@ -41,11 +41,22 @@ const IssueDetail = ({ user, isAdmin }) => {
       const firstImage = Array.isArray(rawIssue.images) && rawIssue.images.length > 0 ? rawIssue.images[0] : null;
       const imageUrl = (firstImage && (firstImage.url || firstImage.secure_url || firstImage.secureUrl || (typeof firstImage === 'string' ? firstImage : null))) || rawIssue.image || rawIssue.imageUrl || null;
 
+      const getStringValue = (value) => {
+        if (!value) return null;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object') {
+          if (value.name) return value.name;
+          if (value._id) return String(value._id);
+          return null;
+        }
+        return String(value);
+      };
+
       const mappedIssue = {
         id: rawIssue._id || rawIssue.id,
         title: rawIssue.title,
         description: rawIssue.description,
-        location: rawIssue.location?.name || 'Location not specified',
+        location: rawIssue.location?.name || (typeof rawIssue.location === 'string' ? rawIssue.location : 'Location not specified'),
         coordinates: rawIssue.location?.coordinates ?
           [rawIssue.location.coordinates.latitude, rawIssue.location.coordinates.longitude] :
           [16.0716, 77.9053],
@@ -53,8 +64,8 @@ const IssueDetail = ({ user, isAdmin }) => {
         upvotes: rawIssue.upvotedBy?.length || rawIssue.upvotes || 0,
         category: rawIssue.category || 'General',
         priority: rawIssue.priority || 'medium',
-        assignedTo: rawIssue.assignedTo || 'Unassigned',
-        reportedBy: rawIssue.reportedBy?.name || rawIssue.reportedBy || 'Citizen',
+        assignedTo: getStringValue(rawIssue.assignedTo) || 'Unassigned',
+        reportedBy: getStringValue(rawIssue.reportedBy) || 'Citizen',
         timestamp: rawIssue.createdAt || rawIssue.timestamp,
         image: imageUrl
       };
@@ -330,7 +341,7 @@ const IssueDetail = ({ user, isAdmin }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600 mb-4">
                 <div className="flex items-center gap-2">
                   <MapPin size={16} className="text-gray-400" />
-                  <span>{issue.location}</span>
+                  <span>{typeof issue.location === 'string' ? issue.location : (issue.location?.name || 'Location not specified')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar size={16} className="text-gray-400" />
@@ -338,12 +349,12 @@ const IssueDetail = ({ user, isAdmin }) => {
                 </div>
                 <div className="flex items-center gap-2">
                   <User size={16} className="text-gray-400" />
-                  <span>Reported by: {issue.reportedBy || 'Anonymous'}</span>
+                  <span>Reported by: {typeof issue.reportedBy === 'string' ? issue.reportedBy : (issue.reportedBy?.name || 'Anonymous')}</span>
                 </div>
                 {issue.assignedTo && issue.assignedTo !== 'Unassigned' && (
                   <div className="flex items-center gap-2">
                     <Settings size={16} className="text-gray-400" />
-                    <span>Assigned to: {issue.assignedTo}</span>
+                    <span>Assigned to: {typeof issue.assignedTo === 'string' ? issue.assignedTo : (issue.assignedTo?.name || 'Unassigned')}</span>
                   </div>
                 )}
               </div>
@@ -358,7 +369,7 @@ const IssueDetail = ({ user, isAdmin }) => {
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
             <span className="text-sm font-medium text-gray-900">Category: </span>
-            <span className="text-sm text-gray-600">{issue.category}</span>
+            <span className="text-sm text-gray-600">{typeof issue.category === 'string' ? issue.category : (issue.category?.name || 'General')}</span>
           </div>
 
           <div className="mb-4">
