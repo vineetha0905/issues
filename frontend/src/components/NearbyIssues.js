@@ -523,9 +523,11 @@ const NearbyIssues = ({ user }) => {
 
       {/* Content */}
       {viewMode === 'map' ? (
-        <div style={{ height: 'calc(100vh - 160px)' }}>
-          <IssueMap issues={filteredIssues} onMarkerClick={handleMarkerClick} center={userCenter || [16.0716, 77.9053]} />
-        </div>
+        <IssueMap
+          issues={filteredIssues}
+          onMarkerClick={handleMarkerClick}
+          center={userCenter || [16.0716, 77.9053]}
+        />
       ) : (
         <div style={{ padding: '1rem 2rem' }}>
           <div className="issues-grid" style={{ gridTemplateColumns: '1fr' }}>

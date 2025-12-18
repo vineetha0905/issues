@@ -201,12 +201,14 @@ def classify_report(report: dict):
         image_match = False
 
     has_image = bool(image_url)
-    # If an image is provided and does NOT relate to the category, reject early with a clear reason
-    if has_image and not image_match:
+    # If an image is provided and clearly contradicts the category *and*
+    # the description also doesn't match, then reject. If the description
+    # is fine, don't punish the user for a weak/ambiguous image classifier.
+    if has_image and not image_match and not desc_match:
         result = {
             "report_id": report["report_id"],
             "status": "rejected",
-            "reason": "image not related to category"
+            "reason": "image/description not clearly related to category"
         }
         dataset.save_report({**report, **result})
         return result
