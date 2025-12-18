@@ -12,51 +12,118 @@ const {
 } = require('../middleware/validation');
 
 /* ===============================
-   SAFE BOUND CONTROLLER METHODS
+   SAFE HANDLER WRAPPER
+   (prevents undefined crashes)
 ================================ */
-const getIssues = issueController.getIssues.bind(issueController);
-const getNearbyIssues = issueController.getNearbyIssues.bind(issueController);
-const getIssueStats = issueController.getIssueStats.bind(issueController);
-const createIssue = issueController.createIssue.bind(issueController);
-const getIssue = issueController.getIssue.bind(issueController);
-const updateIssue = issueController.updateIssue.bind(issueController);
-const deleteIssue = issueController.deleteIssue.bind(issueController);
-const upvoteIssue = issueController.upvoteIssue.bind(issueController);
-const removeUpvote = issueController.removeUpvote.bind(issueController);
-const getIssueComments = issueController.getIssueComments.bind(issueController);
-const addComment = issueController.addComment.bind(issueController);
-const getUserIssues = issueController.getUserIssues.bind(issueController);
+const safe = (fn) => {
+  return (req, res, next) => {
+    if (typeof fn !== 'function') {
+      return res.status(501).json({
+        success: false,
+        message: 'Route handler not implemented'
+      });
+    }
+    return fn(req, res, next);
+  };
+};
 
 /* ===============================
    PUBLIC ROUTES
 ================================ */
-router.get('/', validateIssueFilters, validatePagination, optionalAuth, getIssues);
-router.get('/nearby', getNearbyIssues);
-router.get('/stats', getIssueStats);
+router.get(
+  '/',
+  validateIssueFilters,
+  validatePagination,
+  optionalAuth,
+  safe(issueController.getIssues)
+);
+
+router.get(
+  '/nearby',
+  safe(issueController.getNearbyIssues)
+);
+
+router.get(
+  '/stats',
+  safe(issueController.getIssueStats)
+);
 
 /* ===============================
    PROTECTED ROUTES
 ================================ */
-router.post('/', authenticate, validateIssueCreation, createIssue);
-router.get('/:id', validateObjectId('id'), optionalAuth, getIssue);
-router.put('/:id', authenticate, validateObjectId('id'), validateIssueUpdate, updateIssue);
-router.delete('/:id', authenticate, validateObjectId('id'), deleteIssue);
+router.post(
+  '/',
+  authenticate,
+  validateIssueCreation,
+  safe(issueController.createIssue)
+);
+
+router.get(
+  '/:id',
+  validateObjectId('id'),
+  optionalAuth,
+  safe(issueController.getIssue)
+);
+
+router.put(
+  '/:id',
+  authenticate,
+  validateObjectId('id'),
+  validateIssueUpdate,
+  safe(issueController.updateIssue)
+);
+
+router.delete(
+  '/:id',
+  authenticate,
+  validateObjectId('id'),
+  safe(issueController.deleteIssue)
+);
 
 /* ===============================
    UPVOTING
 ================================ */
-router.post('/:id/upvote', authenticate, validateObjectId('id'), upvoteIssue);
-router.delete('/:id/upvote', authenticate, validateObjectId('id'), removeUpvote);
+router.post(
+  '/:id/upvote',
+  authenticate,
+  validateObjectId('id'),
+  safe(issueController.upvoteIssue)
+);
+
+router.delete(
+  '/:id/upvote',
+  authenticate,
+  validateObjectId('id'),
+  safe(issueController.removeUpvote)
+);
 
 /* ===============================
    COMMENTS
 ================================ */
-router.get('/:id/comments', validateObjectId('id'), validatePagination, getIssueComments);
-router.post('/:id/comments', authenticate, validateObjectId('id'), validateCommentCreation, addComment);
+router.get(
+  '/:id/comments',
+  validateObjectId('id'),
+  validatePagination,
+  safe(issueController.getIssueComments)
+);
+
+router.post(
+  '/:id/comments',
+  authenticate,
+  validateObjectId('id'),
+  validateCommentCreation,
+  safe(issueController.addComment)
+);
 
 /* ===============================
    USER ISSUES
 ================================ */
-router.get('/user/:userId', authenticate, validateObjectId('userId'), validatePagination, getUserIssues);
+router.get(
+  '/user/:userId',
+  authenticate,
+  validateObjectId('userId'),
+  validatePagination,
+  safe(issueController.getUserIssues)
+);
 
 module.exports = router;
