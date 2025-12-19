@@ -279,6 +279,23 @@ class AdminController {
     }
   }
 
+  // Helper function to calculate distance between two coordinates (Haversine formula)
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = this.toRad(lat2 - lat1);
+    const dLon = this.toRad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in kilometers
+  }
+
+  toRad(degrees) {
+    return degrees * (Math.PI / 180);
+  }
+
   // Assign issue to user
   async assignIssue(req, res) {
     try {
@@ -295,37 +312,102 @@ class AdminController {
 
       let assignedUser = null;
       if (assignedTo) {
+        // Manual assignment - use the provided user ID
         assignedUser = await User.findById(assignedTo);
         if (!assignedUser) {
           return res.status(404).json({ success: false, message: 'Assigned user not found' });
         }
-      } else {
-        // Auto-assign by department based on issue category
-        assignedUser = await User.findOne({ role: 'employee', isActive: true, department: issue.category }).sort({ loginCount: 1, lastLogin: -1 });
-        if (!assignedUser) {
-          // Optionally create a demo employee for this department in dev/demo mode
-          const allowDemo = process.env.ALLOW_DEMO_EMPLOYEE !== 'false';
-          if (allowDemo) {
-            const empId = `employee-${(issue.category || 'dept').toLowerCase().replace(/[^a-z]+/g, '-')}`;
-            const demo = new User({
-              name: 'Auto Employee',
-              employeeId: empId,
-              role: 'employee',
-              department: issue.category,
-              password: 'emp123',
-              isVerified: true,
-              isActive: true
-            });
-            await demo.save();
-            assignedUser = demo;
-          } else {
-            return res.status(400).json({ success: false, message: 'No active employee found for department' });
-          }
+        // Verify the user is an active employee
+        const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
+        if (!employeeRoles.includes(assignedUser.role) || !assignedUser.isActive) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Selected user is not an active employee' 
+          });
         }
+      } else {
+        // Auto-assign: Find existing employee within 10km radius matching the department
+        const issueLat = issue.location?.coordinates?.latitude;
+        const issueLon = issue.location?.coordinates?.longitude;
+        const issueCategory = issue.category;
+
+        if (!issueLat || !issueLon) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Issue location is required for auto-assignment' 
+          });
+        }
+
+        // Find all active employees with matching department
+        const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
+        const allEmployees = await User.find({
+          role: { $in: employeeRoles },
+          isActive: true,
+          $or: [
+            { departments: { $in: [issueCategory, 'All'] } },
+            { department: { $in: [issueCategory, 'All'] } }
+          ]
+        });
+
+        // Filter employees within 10km radius
+        const nearbyEmployees = allEmployees.filter(emp => {
+          const empLat = emp.address?.coordinates?.latitude;
+          const empLon = emp.address?.coordinates?.longitude;
+          
+          if (!empLat || !empLon) {
+            return false; // Skip employees without location data
+          }
+          
+          const distance = this.calculateDistance(issueLat, issueLon, empLat, empLon);
+          return distance <= 10; // Within 10km
+        });
+
+        if (nearbyEmployees.length === 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'No active employee found within 10km radius for this department. Please assign manually.' 
+          });
+        }
+
+        // Select the employee with the least assignments (prioritize field-staff)
+        // Sort by: 1) role priority (field-staff first), 2) number of assigned issues
+        const employeesWithAssignmentCount = await Promise.all(
+          nearbyEmployees.map(async (emp) => {
+            const assignmentCount = await Issue.countDocuments({ 
+              assignedTo: emp._id, 
+              status: { $in: ['reported', 'in-progress', 'assigned', 'escalated'] } 
+            });
+            return { employee: emp, assignmentCount };
+          })
+        );
+
+        // Sort: field-staff first, then by assignment count (least assigned first)
+        employeesWithAssignmentCount.sort((a, b) => {
+          const rolePriority = { 'field-staff': 1, 'employee': 2, 'supervisor': 3, 'commissioner': 4 };
+          const aPriority = rolePriority[a.employee.role] || 5;
+          const bPriority = rolePriority[b.employee.role] || 5;
+          
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          return a.assignmentCount - b.assignmentCount;
+        });
+
+        assignedUser = employeesWithAssignmentCount[0].employee;
+      }
+
+      // Determine assigned role based on user's role
+      let assignedRole = null;
+      if (assignedUser.role === 'field-staff' || assignedUser.role === 'employee') {
+        assignedRole = 'field-staff';
+      } else if (assignedUser.role === 'supervisor') {
+        assignedRole = 'supervisor';
+      } else if (assignedUser.role === 'commissioner') {
+        assignedRole = 'commissioner';
       }
 
       // Assign the issue
-      await issue.assign(assignedUser._id, req.user._id);
+      await issue.assign(assignedUser._id, req.user._id, assignedRole);
 
       // Notify the assigned user
       await notificationService.notifyIssueAssignment(issue, assignedUser, req.user);
@@ -333,7 +415,14 @@ class AdminController {
       res.json({
         success: true,
         message: 'Issue assigned successfully',
-        data: { issue }
+        data: { 
+          issue,
+          assignedTo: {
+            name: assignedUser.name,
+            employeeId: assignedUser.employeeId,
+            role: assignedUser.role
+          }
+        }
       });
     } catch (error) {
       console.error('Assign issue error:', error);

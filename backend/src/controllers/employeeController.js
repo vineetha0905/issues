@@ -17,15 +17,13 @@ class EmployeeController {
       if (employeeRoles.includes(user.role)) {
         // Field Staff: Only see complaints assigned to them in their department
         if (user.role === 'field-staff' || user.role === 'employee') {
+          // Must be assigned to this user - this is the primary filter
           filter.assignedTo = user._id;
-          // Filter by department
-          const userDepartments = user.departments && user.departments.length > 0 
-            ? user.departments 
-            : (user.department ? [user.department] : []);
           
-          if (!userDepartments.includes('All')) {
-            filter.category = { $in: userDepartments };
-          }
+          // Note: We don't filter by department here because:
+          // 1. If an issue is assigned to this employee, they should see it regardless
+          // 2. The assignment process already ensures department matching
+          // 3. This prevents issues from not showing up due to department mismatches
         }
         // Supervisor: See complaints assigned to them + escalated from field-staff
         else if (user.role === 'supervisor') {
@@ -69,26 +67,28 @@ class EmployeeController {
         filter.assignedTo = user._id;
       }
 
-      // Always filter out resolved issues - show only unresolved
-      const unresolvedStatuses = { $in: ['reported', 'in-progress', 'escalated'] };
+      // Status filtering: Show unresolved issues by default, but allow filtering by specific status
+      // Unresolved statuses: 'reported', 'in-progress', 'escalated'
+      // Note: When an issue is assigned, it gets status 'in-progress', which is included here
+      const unresolvedStatuses = ['reported', 'in-progress', 'escalated'];
       
       if (status && status !== 'all') {
-        // If specific status requested, use it (but still exclude resolved)
+        // If specific status requested, use it
         if (status === 'resolved') {
           filter.status = 'resolved';
         } else {
           filter.status = status;
         }
       } else {
-        // Default: show only unresolved issues
+        // Default: show only unresolved issues (including newly assigned ones)
         if (filter.$or) {
           // For $or conditions, add unresolved status filter to each condition
           filter.$or = filter.$or.map(condition => ({
             ...condition,
-            status: unresolvedStatuses
+            status: { $in: unresolvedStatuses }
           }));
         } else {
-          filter.status = unresolvedStatuses;
+          filter.status = { $in: unresolvedStatuses };
         }
       }
 
