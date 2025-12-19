@@ -3,13 +3,14 @@ import { toast } from 'sonner';
 import apiService from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { LanguageContext } from '../App';
-import { ArrowLeft, User, Lock, Shield } from 'lucide-react';
+import { ArrowLeft, User, Lock, Shield, Eye, EyeOff } from 'lucide-react';
 
 const AdminLogin = ({ setUser, setIsAdmin }) => {
   const navigate = useNavigate();
   const { t } = useContext(LanguageContext);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e) => {
@@ -95,14 +96,38 @@ const AdminLogin = ({ setUser, setIsAdmin }) => {
               <Lock size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
               Password
             </label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Enter password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{ paddingRight: '45px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px'
+                }}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <button 
@@ -113,19 +138,6 @@ const AdminLogin = ({ setUser, setIsAdmin }) => {
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div style={{ 
-          marginTop: '1.5rem', 
-          padding: '1rem', 
-          background: '#f8fafc', 
-          borderRadius: '8px',
-          fontSize: '0.85rem',
-          color: '#64748b'
-        }}>
-          <strong>Demo Credentials:</strong><br />
-          Username: admin<br />
-          Password: admin123
-        </div>
       </div>
     </div>
   );

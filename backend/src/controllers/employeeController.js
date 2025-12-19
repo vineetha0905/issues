@@ -5,25 +5,146 @@ const notificationService = require('../services/notificationService');
 class EmployeeController {
   async listAssignedIssues(req, res) {
     try {
-      const { page = 1, limit = 20 } = req.query;
+      const { page = 1, limit = 50, status, category, priority } = req.query;
       const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      const filter = {
-        status: { $in: ['reported', 'in-progress'] },
-        $or: [
-          { assignedTo: req.user._id },
-          { category: req.user.department }
-        ]
-      };
+      const user = req.user;
+      const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
+      
+      // Build filter based on role
+      const filter = {};
+
+      if (employeeRoles.includes(user.role)) {
+        // Field Staff: Only see complaints assigned to them in their department
+        if (user.role === 'field-staff' || user.role === 'employee') {
+          filter.assignedTo = user._id;
+          // Filter by department
+          const userDepartments = user.departments && user.departments.length > 0 
+            ? user.departments 
+            : (user.department ? [user.department] : []);
+          
+          if (!userDepartments.includes('All')) {
+            filter.category = { $in: userDepartments };
+          }
+        }
+        // Supervisor: See complaints assigned to them + escalated from field-staff
+        else if (user.role === 'supervisor') {
+          filter.$or = [
+            { assignedTo: user._id },
+            { 
+              assignedRole: 'field-staff',
+              status: { $in: ['escalated', 'in-progress'] },
+              category: { 
+                $in: user.departments && user.departments.length > 0 
+                  ? (user.departments.includes('All') ? [] : user.departments)
+                  : (user.department && user.department !== 'All' ? [user.department] : [])
+              }
+            }
+          ];
+          
+          // Filter by department if not 'All'
+          const userDepartments = user.departments && user.departments.length > 0 
+            ? user.departments 
+            : (user.department ? [user.department] : []);
+          
+          if (!userDepartments.includes('All') && userDepartments.length > 0) {
+            if (filter.$or) {
+              filter.$or = filter.$or.map(condition => {
+                if (condition.category) {
+                  condition.category = { $in: userDepartments };
+                }
+                return condition;
+              });
+            } else {
+              filter.category = { $in: userDepartments };
+            }
+          }
+        }
+        // Commissioner: See ALL complaints from ALL departments
+        else if (user.role === 'commissioner') {
+          // No additional filtering - can see everything
+        }
+      } else {
+        // Fallback for other roles
+        filter.assignedTo = user._id;
+      }
+
+      // Apply status filter
+      if (status && status !== 'all') {
+        if (filter.$or) {
+          // Add status to all $or conditions
+          filter.$or = filter.$or.map(condition => ({
+            ...condition,
+            status: status
+          }));
+        } else {
+          filter.status = status;
+        }
+      } else if (!filter.status && !filter.$or) {
+        // Default: show all non-resolved issues (only if no $or condition)
+        filter.status = { $in: ['reported', 'in-progress', 'escalated'] };
+      } else if (filter.$or && !status) {
+        // For $or conditions, add status filter to each condition
+        filter.$or = filter.$or.map(condition => ({
+          ...condition,
+          status: { $in: ['reported', 'in-progress', 'escalated'] }
+        }));
+      }
+
+      // Apply category filter if provided
+      if (category && category !== 'all') {
+        if (filter.$or) {
+          // Add category to all $or conditions
+          filter.$or = filter.$or.map(condition => {
+            if (condition.category && Array.isArray(condition.category.$in)) {
+              // If category already has $in, intersect with provided category
+              return {
+                ...condition,
+                category: { $in: condition.category.$in.filter(c => c === category) }
+              };
+            }
+            return {
+              ...condition,
+              category: category
+            };
+          });
+        } else {
+          if (filter.category && Array.isArray(filter.category.$in)) {
+            // Intersect with existing category filter
+            filter.category = { $in: filter.category.$in.filter(c => c === category) };
+          } else {
+            filter.category = category;
+          }
+        }
+      }
+
+      // Apply priority filter if provided
+      if (priority && priority !== 'all') {
+        filter.priority = priority;
+      }
 
       const issues = await Issue.find(filter)
-        .populate('reportedBy', 'name email')
-        .populate('assignedTo', 'name email')
+        .populate('reportedBy', 'name email profileImage')
+        .populate('assignedTo', 'name email employeeId role')
+        .populate('assignedBy', 'name email employeeId')
         .sort({ priority: -1, createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
 
-      res.json({ success: true, data: { issues } });
+      const total = await Issue.countDocuments(filter);
+
+      res.json({ 
+        success: true, 
+        data: { 
+          issues,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / parseInt(limit)),
+            totalItems: total,
+            itemsPerPage: parseInt(limit)
+          }
+        } 
+      });
     } catch (error) {
       console.error('List assigned issues error:', error);
       res.status(500).json({ success: false, message: 'Server error', error: error.message });
@@ -40,10 +161,38 @@ class EmployeeController {
         return res.status(404).json({ success: false, message: 'Issue not found' });
       }
 
-      // Authorization: allow if admin OR assigned to user OR same department
-      const sameDepartment = issue.category === req.user.department;
-      const isAssignedToUser = issue.assignedTo?.toString() === req.user._id.toString();
-      if (req.user.role !== 'admin' && !isAssignedToUser && !sameDepartment) {
+      // Authorization: allow if admin OR assigned to user OR role-based access
+      const user = req.user;
+      const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
+      const isAssignedToUser = issue.assignedTo?.toString() === user._id.toString();
+      const isAdmin = user.role === 'admin';
+      
+      let isAuthorized = isAdmin || isAssignedToUser;
+      
+      if (!isAuthorized && employeeRoles.includes(user.role)) {
+        // Check department access
+        const userDepartments = user.departments && user.departments.length > 0 
+          ? user.departments 
+          : (user.department ? [user.department] : []);
+        
+        if (userDepartments.includes('All') || userDepartments.includes(issue.category)) {
+          isAuthorized = true;
+        }
+        
+        // Commissioner can resolve any issue
+        if (user.role === 'commissioner') {
+          isAuthorized = true;
+        }
+        
+        // Supervisor can resolve escalated issues from their department
+        if (user.role === 'supervisor' && issue.status === 'escalated' && 
+            issue.assignedRole === 'field-staff' && 
+            (userDepartments.includes('All') || userDepartments.includes(issue.category))) {
+          isAuthorized = true;
+        }
+      }
+      
+      if (!isAuthorized) {
         return res.status(403).json({ success: false, message: 'Not authorized to resolve this issue' });
       }
 
