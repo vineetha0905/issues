@@ -64,16 +64,14 @@ const Welcome = () => {
         </div>
       </div>
 
-      <button className="get-started-btn" onClick={handleGetStarted}>
-        {t('getStarted')}
-      </button>
+    
 
       <div style={{ marginTop: '2rem', textAlign: 'center', display: 'flex', gap: '12px', justifyContent: 'center' }}>
         <button 
           className="btn-secondary" 
           onClick={() => navigate('/employee-login')}
           style={{ 
-            background: 'rgba(255,255,255,0.2)', 
+            background: 'rgba(30,255,0,0.2)', 
             border: '1px solid rgba(255,255,255,0.3)',
             color: 'white'
           }}
@@ -84,7 +82,7 @@ const Welcome = () => {
           className="btn-secondary" 
           onClick={() => navigate('/admin-login')}
           style={{ 
-            background: 'rgba(255,255,255,0.2)', 
+            background: 'rgba(30,255,0,0.2)', 
             border: '1px solid rgba(255,255,255,0.3)',
             color: 'white'
           }}
@@ -92,6 +90,9 @@ const Welcome = () => {
           {t('adminLogin')}
         </button>
       </div>
+      <button className="get-started-btn" onClick={handleGetStarted}>
+        Citizen Login
+      </button>
     </div>
   );
 };
