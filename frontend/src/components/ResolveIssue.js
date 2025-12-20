@@ -59,7 +59,6 @@ const ResolveIssue = () => {
 
   const handleRemoveImage = () => {
     setImageFile(null);
-    // Reset the file input
     const fileInput = document.getElementById('resolveFileInput');
     if (fileInput) {
       fileInput.value = '';
@@ -83,55 +82,48 @@ const ResolveIssue = () => {
   const photoUrl = issue.images?.[0]?.url;
 
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <button 
-          onClick={() => navigate('/employee')}
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: '#1e4359', 
-            cursor: 'pointer',
-            marginBottom: '1rem'
-          }}
-        >
-          <ArrowLeft size={20} />
-        </button>
-
-        <div className="login-header">
-          <h1 className="login-title">Resolve Issue</h1>
-          <p className="login-subtitle">Upload proof and confirm location</p>
+    <div className="form-container">
+      <div className="form-card">
+        <div className="flex items-center mb-8">
+          <button 
+            onClick={() => navigate('/employee')}
+            className="bg-transparent border-none text-[#1e4359] cursor-pointer mr-4"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <h1 className="form-title">Resolve Issue</h1>
         </div>
 
-        {/* Original Issue Image */}
+        <p className="text-sm text-slate-500 mb-8 -mt-6 ml-9">Upload proof and confirm location</p>
+
         {photoUrl && (
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '0.5rem' }}>Original Issue Photo</h3>
-            <div className="issue-image" style={{ height: 200, borderRadius: 8, overflow: 'hidden', background: '#f8fafc' }}>
-              <img src={photoUrl} alt="issue" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <div className="mb-8">
+            <h3 className="text-sm text-slate-500 mb-2 font-semibold">Original Issue Photo</h3>
+            <div className="h-48 rounded-xl overflow-hidden bg-slate-50">
+              <img src={photoUrl} alt="issue" className="w-full h-full object-cover" />
             </div>
           </div>
         )}
 
-        {/* Location Info */}
-        <div style={{ marginBottom: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <MapPin size={16} />
-            <span style={{ fontWeight: '600' }}>Issue Location</span>
+        <div className="mb-8 p-4 bg-slate-50 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <MapPin size={16} className="text-[#1e4359]" />
+            <span className="font-semibold text-slate-700">Issue Location</span>
           </div>
-          <div style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '0.5rem' }}>
+          <div className="text-sm text-slate-500 mb-2">
             {issue.location?.name}
           </div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-            Lat: {issue.location?.coordinates?.latitude?.toFixed(6)} | Lng: {issue.location?.coordinates?.longitude?.toFixed(6)}
+          <div className="text-xs text-slate-400 flex items-center gap-2">
+            <span>Lat: {issue.location?.coordinates?.latitude?.toFixed(6)}</span>
+            <span className="text-slate-300">•</span>
+            <span>Lng: {issue.location?.coordinates?.longitude?.toFixed(6)}</span>
           </div>
-          <button className="btn-secondary" style={{ marginTop: '0.5rem', fontSize: '0.8rem' }} onClick={openMaps}>
+          <button className="btn-secondary mt-2 text-xs px-3 py-1.5" onClick={openMaps}>
             Open in Maps
           </button>
         </div>
 
         <form onSubmit={onSubmit} className="login-form">
-          {/* Photo Upload */}
           <div className="form-group">
             <label className="form-label">Upload Resolved Photo (Optional)</label>
             <div 
@@ -143,17 +135,17 @@ const ResolveIssue = () => {
                 type="file"
                 accept="image/*"
                 onChange={handleFileUpload}
-                style={{ display: 'none' }}
+                className="hidden"
               />
               
               {imageFile ? (
-                <div style={{ position: 'relative' }}>
+                <div className="relative">
                   <img 
                     src={URL.createObjectURL(imageFile)} 
                     alt="Preview"
                     className="uploaded-image"
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
+                  <div className="flex justify-between items-center mt-2">
                     <p className="upload-text">Click to change image</p>
                     <button
                       type="button"
@@ -161,15 +153,7 @@ const ResolveIssue = () => {
                         e.stopPropagation();
                         handleRemoveImage();
                       }}
-                      style={{
-                        background: '#dc2626',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        padding: '0.25rem 0.5rem',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer'
-                      }}
+                      className="bg-red-600 text-white border-none rounded px-2 py-1 text-xs cursor-pointer"
                     >
                       Remove
                     </button>
@@ -184,11 +168,10 @@ const ResolveIssue = () => {
             </div>
           </div>
 
-          {/* GPS Coordinates */}
           <div className="form-group">
             <label className="form-label">Resolved Location (Required - within 10m of original)</label>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'end', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1', minWidth: '120px' }}>
+            <div className="flex gap-2 items-end flex-wrap">
+              <div className="flex-1 min-w-[120px]">
                 <input
                   type="number"
                   className="form-input"
@@ -199,7 +182,7 @@ const ResolveIssue = () => {
                   required
                 />
               </div>
-              <div style={{ flex: '1', minWidth: '120px' }}>
+              <div className="flex-1 min-w-[120px]">
                 <input
                   type="number"
                   className="form-input"
@@ -213,15 +196,7 @@ const ResolveIssue = () => {
               <button
                 type="button"
                 onClick={handleGetLocation}
-                className="btn-secondary"
-                style={{ 
-                  padding: '0.75rem 1rem',
-                  minWidth: '80px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.9rem'
-                }}
+                className="btn-secondary px-4 py-3 min-w-[80px] flex items-center gap-2 text-sm"
               >
                 <MapPin size={16} />
                 GPS
@@ -230,7 +205,7 @@ const ResolveIssue = () => {
           </div>
 
           <button className="btn-primary" type="submit" disabled={submitting}>
-            <CheckCircle size={16} style={{ marginRight: 8 }} /> 
+            <CheckCircle size={16} className="mr-2" /> 
             {submitting ? 'Submitting...' : 'Mark as Resolved'}
           </button>
         </form>
@@ -240,5 +215,3 @@ const ResolveIssue = () => {
 };
 
 export default ResolveIssue;
-
-
