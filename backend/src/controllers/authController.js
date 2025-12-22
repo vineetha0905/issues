@@ -4,6 +4,46 @@ const emailService = require('../services/emailService');
 const notificationService = require('../services/notificationService');
 
 class AuthController {
+  // Helper function to clean address object - removes undefined values, especially coordinates
+  cleanAddress(addressObj) {
+    if (!addressObj || typeof addressObj !== 'object') return null;
+    
+    const clean = {};
+    
+    // Only include defined, non-empty string values
+    if (addressObj.street && typeof addressObj.street === 'string' && addressObj.street.trim()) {
+      clean.street = addressObj.street.trim();
+    }
+    if (addressObj.city && typeof addressObj.city === 'string' && addressObj.city.trim()) {
+      clean.city = addressObj.city.trim();
+    }
+    if (addressObj.state && typeof addressObj.state === 'string' && addressObj.state.trim()) {
+      clean.state = addressObj.state.trim();
+    }
+    if (addressObj.pincode && typeof addressObj.pincode === 'string' && addressObj.pincode.trim()) {
+      clean.pincode = addressObj.pincode.trim();
+    }
+    
+    // Only include coordinates if both latitude and longitude are valid numbers
+    // Explicitly check for undefined and null to avoid any issues
+    if (addressObj.coordinates && 
+        typeof addressObj.coordinates === 'object' &&
+        addressObj.coordinates !== null &&
+        typeof addressObj.coordinates.latitude === 'number' && 
+        typeof addressObj.coordinates.longitude === 'number' &&
+        !isNaN(addressObj.coordinates.latitude) &&
+        !isNaN(addressObj.coordinates.longitude) &&
+        addressObj.coordinates.latitude !== null &&
+        addressObj.coordinates.longitude !== null) {
+      clean.coordinates = {
+        latitude: addressObj.coordinates.latitude,
+        longitude: addressObj.coordinates.longitude
+      };
+    }
+    
+    return Object.keys(clean).length > 0 ? clean : null;
+  }
+
   // Register a new user
   async register(req, res) {
     try {
@@ -52,27 +92,43 @@ class AuthController {
         if (email) existingUser.email = email;
         if (password) existingUser.password = password;
         if (address) {
+          // Always clean and set address properly to avoid undefined coordinate issues
+          let cleanAddress;
           if (typeof address === 'string') {
-            existingUser.address = { ...(existingUser.address || {}), street: address };
-          } else if (address.street || address.city || address.state || address.pincode) {
-            // Clean address object - remove undefined values, especially for nested coordinates
-            const cleanAddress = {};
-            if (address.street) cleanAddress.street = address.street;
-            if (address.city) cleanAddress.city = address.city;
-            if (address.state) cleanAddress.state = address.state;
-            if (address.pincode) cleanAddress.pincode = address.pincode;
-            
-            // Only include coordinates if both latitude and longitude are defined
-            if (address.coordinates && 
-                address.coordinates.latitude !== undefined && 
-                address.coordinates.longitude !== undefined) {
-              cleanAddress.coordinates = {
-                latitude: address.coordinates.latitude,
-                longitude: address.coordinates.longitude
-              };
+            // Convert existing address to plain object to avoid Mongoose subdocument issues
+            const existingAddr = existingUser.address ? 
+              (existingUser.address.toObject ? existingUser.address.toObject() : existingUser.address) : 
+              null;
+            const existingClean = this.cleanAddress(existingAddr) || {};
+            cleanAddress = { ...existingClean, street: address };
+          } else {
+            // Convert existing address to plain object to avoid Mongoose subdocument issues
+            const existingAddr = existingUser.address ? 
+              (existingUser.address.toObject ? existingUser.address.toObject() : existingUser.address) : 
+              null;
+            const existingClean = this.cleanAddress(existingAddr) || {};
+            const newClean = this.cleanAddress(address) || {};
+            cleanAddress = { ...existingClean, ...newClean };
+          }
+          
+          // Final safety check: remove coordinates if they're invalid or undefined
+          if (cleanAddress && cleanAddress.coordinates) {
+            const lat = cleanAddress.coordinates.latitude;
+            const lng = cleanAddress.coordinates.longitude;
+            if (lat === undefined || lng === undefined || 
+                lat === null || lng === null ||
+                typeof lat !== 'number' || typeof lng !== 'number' ||
+                isNaN(lat) || isNaN(lng)) {
+              delete cleanAddress.coordinates;
             }
-            
-            existingUser.address = { ...(existingUser.address || {}), ...cleanAddress };
+          }
+          
+          // Use set() to properly update the address and avoid validation issues
+          if (cleanAddress && Object.keys(cleanAddress).length > 0) {
+            existingUser.set('address', cleanAddress);
+          } else if (cleanAddress === null) {
+            // If address is completely empty, unset it
+            existingUser.set('address', undefined);
           }
         }
         existingUser.role = 'citizen';
@@ -120,28 +176,14 @@ class AuthController {
       const user = new User(userData);
 
       if (address) {
-        // store as simple string in address.street for compatibility
+        // Clean address object before setting
         if (typeof address === 'string') {
           user.address = { street: address };
-        } else if (address.street || address.city || address.state || address.pincode) {
-          // Clean address object - remove undefined values, especially for nested coordinates
-          const cleanAddress = {};
-          if (address.street) cleanAddress.street = address.street;
-          if (address.city) cleanAddress.city = address.city;
-          if (address.state) cleanAddress.state = address.state;
-          if (address.pincode) cleanAddress.pincode = address.pincode;
-          
-          // Only include coordinates if both latitude and longitude are defined
-          if (address.coordinates && 
-              address.coordinates.latitude !== undefined && 
-              address.coordinates.longitude !== undefined) {
-            cleanAddress.coordinates = {
-              latitude: address.coordinates.latitude,
-              longitude: address.coordinates.longitude
-            };
+        } else {
+          const cleanAddress = this.cleanAddress(address);
+          if (cleanAddress) {
+            user.address = cleanAddress;
           }
-          
-          user.address = cleanAddress;
         }
       }
 

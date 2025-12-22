@@ -54,8 +54,9 @@ class ApiService {
   // ================= ML VALIDATION =================
   async validateReportWithML(payload) {
     // Create an AbortController for timeout
+    // ML processing can take time (especially image classification), so use 90 seconds
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout for ML processing
     
     try {
       const response = await fetch(`${this.mlBaseURL}/submit`, {
@@ -99,12 +100,12 @@ class ApiService {
       console.error('Error calling ML backend:', error);
       
       // Handle specific error types
-      if (error.name === 'AbortError') {
-        throw new Error('Request timeout: ML backend took too long to respond. Please try again.');
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        throw new Error('ML validation timeout: Processing took longer than expected.');
       } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        throw new Error('Network error: Unable to reach ML backend. Please check your connection and try again.');
+        throw new Error('Network error: Unable to reach ML backend.');
       } else if (error.message.includes('CORS')) {
-        throw new Error('CORS error: ML backend is not configured to accept requests from this origin.');
+        throw new Error('CORS error: ML backend configuration issue.');
       }
       
       // Re-throw the error so the caller can handle it

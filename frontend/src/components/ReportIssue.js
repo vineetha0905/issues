@@ -251,6 +251,7 @@ const ReportIssue = ({ user }) => {
 
       let mlResult;
       try {
+        // ML validation with extended timeout (90 seconds)
         mlResult = await apiService.validateReportWithML(mlPayload);
         console.log('ML validation result:', mlResult);
         
@@ -276,11 +277,17 @@ const ReportIssue = ({ user }) => {
         }
       } catch (mlError) {
         console.error('ML validation error:', mlError);
-        // ML service is required for category detection - reject if unavailable
-        setIsSubmitting(false);
-        const errorMsg = mlError.message || 'Category detection service unavailable';
-        toast.error(`Unable to process report: ${errorMsg}. Please try again later.`);
-        return;
+        // ML service failed - allow report to proceed with default category
+        // This ensures users can still submit reports even if ML backend is slow/down
+        console.warn('ML validation failed, proceeding with default category:', mlError.message);
+        
+        // Use default category if ML fails
+        if (!issueData.category) {
+          issueData.category = 'Other';
+        }
+        
+        // Show a warning toast but don't block submission
+        toast.warning('Category detection unavailable. Using default category. Report will still be submitted.');
       }
 
       // 2) Submit to backend only if accepted
