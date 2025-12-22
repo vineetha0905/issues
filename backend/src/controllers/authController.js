@@ -89,14 +89,18 @@ class AuthController {
       }
 
       // Create new user
-      const user = new User({
+      const userData = {
         name,
         aadhaarNumber,
-        email,
         mobile,
-        password,
         role: 'citizen'
-      });
+      };
+      
+      // Only include optional fields if they are provided
+      if (email) userData.email = email;
+      if (password) userData.password = password;
+      
+      const user = new User(userData);
 
       if (address) {
         // store as simple string in address.street for compatibility
@@ -122,11 +126,19 @@ class AuthController {
 
       // Generate OTP for email verification
       if (email) {
-        const otp = user.generateOTP();
-        await user.save();
+        try {
+          const otp = user.generateOTP();
+          await user.save();
 
-        // Send OTP email
-        await emailService.sendOTP(email, otp, name);
+          // Send OTP email (non-blocking - don't fail registration if email fails)
+          const emailResult = await emailService.sendOTP(email, otp, name);
+          if (!emailResult.success) {
+            console.warn('Failed to send OTP email, but registration continues:', emailResult.error);
+          }
+        } catch (emailError) {
+          // Log but don't fail registration if email service fails
+          console.error('Error sending OTP email (non-critical):', emailError);
+        }
       }
 
       // Generate tokens
@@ -144,10 +156,24 @@ class AuthController {
       });
     } catch (error) {
       console.error('Registration error:', error);
+      console.error('Registration error stack:', error.stack);
+      console.error('Registration request body:', req.body);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Server error during registration';
+      if (error.name === 'ValidationError') {
+        errorMessage = 'Validation error: ' + Object.values(error.errors).map(e => e.message).join(', ');
+      } else if (error.name === 'MongoServerError' && error.code === 11000) {
+        const dupField = Object.keys(error.keyPattern || {})[0] || 'field';
+        errorMessage = `User already exists with this ${dupField}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       res.status(500).json({
         success: false,
-        message: 'Server error during registration',
-        error: error.message
+        message: errorMessage,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }

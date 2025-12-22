@@ -53,12 +53,19 @@ class ApiService {
 
   // ================= ML VALIDATION =================
   async validateReportWithML(payload) {
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
     try {
       const response = await fetch(`${this.mlBaseURL}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       // Read response as text first, then parse as JSON
       const responseText = await response.text();
@@ -88,7 +95,18 @@ class ApiService {
       // Success response (200) - return the result (which may have status: "accepted" or "rejected")
       return result;
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Error calling ML backend:', error);
+      
+      // Handle specific error types
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout: ML backend took too long to respond. Please try again.');
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        throw new Error('Network error: Unable to reach ML backend. Please check your connection and try again.');
+      } else if (error.message.includes('CORS')) {
+        throw new Error('CORS error: ML backend is not configured to accept requests from this origin.');
+      }
+      
       // Re-throw the error so the caller can handle it
       throw error;
     }

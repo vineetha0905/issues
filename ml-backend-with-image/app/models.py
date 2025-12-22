@@ -4,7 +4,7 @@ from typing import Optional
 class ReportIn(BaseModel):
     report_id: str
     description: str
-    category: str
+    category: Optional[str] = None  # Optional - will be auto-detected by pipeline if not provided
     user_id: Optional[str] = None
     image_url: Optional[str] = None
     latitude: Optional[float] = None

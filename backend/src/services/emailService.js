@@ -2,21 +2,33 @@ const nodemailer = require('nodemailer');
 
 class EmailService {
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT,
-      secure: false, // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
+    // Only create transporter if SMTP config is available
+    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT || 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        }
+      });
+    } else {
+      console.warn('Email service not configured - SMTP settings missing');
+      this.transporter = null;
+    }
   }
 
   // Send OTP email
   async sendOTP(email, otp, name = 'User') {
+    // Check if email configuration is available
+    if (!this.transporter || !process.env.FROM_EMAIL) {
+      console.warn('Email service not configured - skipping OTP email');
+      return { success: false, error: 'Email service not configured' };
+    }
+
     const mailOptions = {
-      from: `${process.env.FROM_NAME} <${process.env.FROM_EMAIL}>`,
+      from: `${process.env.FROM_NAME || 'CivicConnect'} <${process.env.FROM_EMAIL}>`,
       to: email,
       subject: 'Your OTP for CivicConnect',
       html: `
