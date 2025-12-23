@@ -3,12 +3,12 @@ services:
     name: civic-connect-ml
     env: python
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 75
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 75 --access-log --log-level info
     envVars:
       - key: PORT
         value: 7860
-      - key: CORS_ORIGINS
-        value: "https://civic-connect-lemon.vercel.app"
       - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
         value: "1"
 

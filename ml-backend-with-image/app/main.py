@@ -1,41 +1,35 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import traceback
 import os
 import sys
+import json
 
-# Add better error handling for imports
+# Initialize app first - this must work
+app = FastAPI(title="Civic ML Backend API", version="1.0.0")
+
+# Try to import ML modules - make them optional so app can start even if they fail
+classify_report = None
+ml_available = False
+
 try:
     from app.pipeline import classify_report
-    from app.models import ReportIn
-except ImportError as e:
-    print(f"Import error: {e}")
-    print(f"Python path: {sys.path}")
-    raise
-
-app = FastAPI(title="Civic ML Backend API", version="1.0.0")
+    ml_available = True
+    print("✅ ML modules loaded successfully")
+except Exception as e:
+    print(f"⚠️ ML modules not available (non-critical): {e}")
+    print("⚠️ API will return default responses")
 
 # Log startup information
 print("=" * 50)
 print("ML Backend API Starting...")
 print(f"Python version: {sys.version}")
 print(f"Working directory: {os.getcwd()}")
-print(f"Python path: {sys.path}")
+print(f"ML Available: {ml_available}")
 print("=" * 50)
 
-# Note: Models are loaded lazily (on first use) to save memory
-# CLIP model will be loaded when first image classification is needed
-
 # CORS configuration - SIMPLIFIED AND RELIABLE
-# The simplest approach: allow all origins with credentials=False
-# This is safe because we don't use cookies or authentication headers
-cors_origins_env = os.getenv("CORS_ORIGINS", "")
-
-# Always use ["*"] for maximum compatibility - this works with allow_credentials=False
-# FastAPI CORSMiddleware supports this combination
-cors_origins = ["*"]
-
-# Add CORS middleware - MUST be added before routes are defined
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins
@@ -46,62 +40,97 @@ app.add_middleware(
     max_age=3600,  # Cache preflight for 1 hour
 )
 
-# Log CORS configuration
 print("=" * 50)
 print("CORS Configuration:")
 print("  allow_origins: ['*'] (all origins)")
 print("  allow_credentials: False")
-print("  allow_methods: * (all methods)")
-print("  allow_headers: * (all headers)")
-print("  max_age: 3600")
 print("=" * 50)
 
 @app.get("/")
 def health():
-    return {"status": "ML API running", "version": "1.0.0"}
+    return {"status": "ML API running", "version": "1.0.0", "ml_available": ml_available}
 
 @app.get("/health")
 def health_check():
     """Health check endpoint for Render"""
-    return {"status": "healthy", "service": "ML Backend"}
+    return {"status": "healthy", "service": "ML Backend", "ml_available": ml_available}
 
-# Add explicit OPTIONS handler for CORS preflight
 @app.options("/submit")
 async def submit_options():
     """Handle CORS preflight requests"""
     return {"status": "ok"}
 
 @app.post("/submit")
-async def submit_report(data: ReportIn):
+async def submit_report(request: Request):
     """
     Submit a report for ML validation and classification.
-    Accepts ReportIn model with required fields: report_id, description
+    Accepts JSON with required fields: report_id, description
     """
     try:
-        print(f"Received ML validation request: report_id={data.report_id}, description_length={len(data.description or '')}")
+        # Parse JSON body
+        try:
+            body = await request.json()
+        except:
+            body = await request.body()
+            body = json.loads(body.decode('utf-8'))
         
-        # Convert Pydantic model to dict for pipeline
-        report_data = data.dict()
+        report_id = body.get("report_id")
+        description = body.get("description")
+        
+        print(f"Received ML validation request: report_id={report_id}, description_length={len(description or '')}")
         
         # Validate required fields
-        if not report_data.get("report_id") or not report_data.get("description"):
-            print("Validation failed: Missing required fields")
+        if not report_id or not description:
             raise HTTPException(
                 status_code=400, 
                 detail="Missing required fields: report_id and description are required"
             )
         
-        # Classify the report
+        # Check if ML is available
+        if not ml_available or classify_report is None:
+            print("⚠️ ML not available, returning default acceptance")
+            # Return default acceptance if ML is not available
+            return {
+                "report_id": report_id,
+                "accept": True,
+                "status": "accepted",
+                "category": "Other",
+                "department": "Other",
+                "urgency": "low",
+                "priority": "medium",
+                "reason": "ML service unavailable, default acceptance"
+            }
+        
+        # Prepare report data
+        report_data = {
+            "report_id": report_id,
+            "description": description,
+            "user_id": body.get("user_id"),
+            "image_url": body.get("image_url"),
+            "latitude": body.get("latitude"),
+            "longitude": body.get("longitude"),
+            "category": body.get("category")
+        }
+        
+        # Classify the report using ML
         print("Starting ML classification...")
         result = classify_report(report_data)
         print(f"ML classification complete: status={result.get('status')}, category={result.get('category')}")
         return result
+        
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error in submit_report: {str(e)}")
         print(traceback.format_exc())
-        raise HTTPException(
+        # Return error response instead of crashing
+        return JSONResponse(
             status_code=500,
-            detail=f"Internal server error: {str(e)}"
+            content={
+                "report_id": body.get("report_id", "unknown") if 'body' in locals() else "unknown",
+                "accept": False,
+                "status": "error",
+                "category": "Other",
+                "reason": f"ML processing error: {str(e)}"
+            }
         )
