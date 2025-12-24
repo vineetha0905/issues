@@ -63,70 +63,113 @@ async def submit_options():
 
 @app.post("/submit")
 async def submit_report(
-    report_id: str = Form(...),
-    description: str = Form(...),
-    user_id: Optional[str] = Form(None),
-    latitude: Optional[str] = Form(None),
-    longitude: Optional[str] = Form(None),
-    image: Optional[UploadFile] = File(None)
+    report_id: str = Form(..., description="Unique identifier for the report"),
+    description: str = Form(..., description="Description of the issue"),
+    user_id: Optional[str] = Form(None, description="Optional user identifier"),
+    latitude: Optional[str] = Form(None, description="Optional latitude as string (e.g., '37.7749')"),
+    longitude: Optional[str] = Form(None, description="Optional longitude as string (e.g., '-122.4194')"),
+    image: Optional[UploadFile] = File(None, description="Optional image file (JPEG, PNG, etc.)")
 ):
     """
     Submit a report for ML validation and classification.
-    Accepts multipart/form-data with:
-    - report_id (required)
-    - description (required)
-    - user_id (optional)
-    - latitude (optional, as string, will be converted to float)
-    - longitude (optional, as string, will be converted to float)
-    - image (optional, as file bytes)
+    
+    Accepts multipart/form-data with the following fields:
+    - report_id (required, string): Unique identifier for the report
+    - description (required, string): Description of the issue
+    - user_id (optional, string): User identifier
+    - latitude (optional, string): Latitude coordinate (-90 to 90), will be converted to float
+    - longitude (optional, string): Longitude coordinate (-180 to 180), will be converted to float
+    - image (optional, file): Image file (JPEG, PNG, etc.)
+    
+    Returns a JSON response with classification results.
     """
     try:
         print(f"Received ML validation request: report_id={report_id}, description_length={len(description or '')}")
         
-        # Validate required fields
-        if not report_id or not description:
+        # Validate required fields with clear error messages
+        if not report_id or not report_id.strip():
             raise HTTPException(
-                status_code=400, 
-                detail="Missing required fields: report_id and description are required"
+                status_code=422,
+                detail="Validation error: 'report_id' is required and cannot be empty"
+            )
+        if not description or not description.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Validation error: 'description' is required and cannot be empty"
             )
         
-        # Convert latitude and longitude from string to float if provided
+        # Clean up string fields
+        report_id = report_id.strip()
+        description = description.strip()
+        user_id = user_id.strip() if user_id else None
+        
+        # Validate and convert latitude
         latitude_float = None
-        longitude_float = None
         if latitude:
             try:
-                latitude_float = float(latitude)
-            except (ValueError, TypeError):
-                print(f"Warning: Invalid latitude value '{latitude}', ignoring")
+                latitude_float = float(latitude.strip())
+                if not (-90 <= latitude_float <= 90):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Validation error: 'latitude' must be between -90 and 90, got {latitude_float}"
+                    )
+            except HTTPException:
+                raise  # Re-raise HTTPException as-is
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Validation error: 'latitude' must be a valid number, got '{latitude}'"
+                )
+        
+        # Validate and convert longitude
+        longitude_float = None
         if longitude:
             try:
-                longitude_float = float(longitude)
-            except (ValueError, TypeError):
-                print(f"Warning: Invalid longitude value '{longitude}', ignoring")
+                longitude_float = float(longitude.strip())
+                if not (-180 <= longitude_float <= 180):
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Validation error: 'longitude' must be between -180 and 180, got {longitude_float}"
+                    )
+            except HTTPException:
+                raise  # Re-raise HTTPException as-is
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Validation error: 'longitude' must be a valid number, got '{longitude}'"
+                )
         
-        # Check if ML is available
-        if not ml_available or classify_report is None:
-            print("⚠️ ML not available, returning default acceptance")
-            # Return default acceptance if ML is not available
-            return {
-                "report_id": report_id,
-                "accept": True,
-                "status": "accepted",
-                "category": "Other",
-                "confidence": 0.0,
-                "urgency": "low",
-                "reason": "ML service unavailable, default acceptance"
-            }
-        
-        # Read image bytes if provided
+        # Read and validate image file if provided
         image_bytes = None
+        MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
         if image:
             try:
+                # Check content type if available (informational only, not strict)
+                if image.content_type:
+                    allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                    if image.content_type not in allowed_types:
+                        print(f"Warning: Unexpected content type '{image.content_type}', continuing anyway")
+                
+                # Read image with size limit
                 image_bytes = await image.read()
-                print(f"Received image: {len(image_bytes)} bytes")
+                if len(image_bytes) > MAX_IMAGE_SIZE:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Validation error: Image file too large. Maximum size is {MAX_IMAGE_SIZE / (1024*1024):.1f}MB, got {len(image_bytes) / (1024*1024):.1f}MB"
+                    )
+                if len(image_bytes) == 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Validation error: Image file is empty"
+                    )
+                print(f"Received image: {len(image_bytes)} bytes, content_type: {image.content_type}")
+            except HTTPException:
+                raise
             except Exception as e:
-                print(f"Error reading image: {str(e)}")
-                # Continue without image if read fails
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Validation error: Failed to read image file: {str(e)}"
+                )
         
         # Prepare report data
         report_data = {

@@ -25,7 +25,7 @@ const Welcome = () => {
         <p className="welcome-subtitle">Report and track civic issues in your community</p>
       </div>
 
-      <img src='https://img.sanishtech.com/u/a4c34404f2c12b8e79f323a2577cd933.png' style={{width:'300px',height:'300px'}}/>
+      <img src='./images/logo.png' style={{width:'300px',height:'300px'}}/>
 
       <div className="language-section">
         <h2 className="language-title">{t('selectLanguage')}</h2>
