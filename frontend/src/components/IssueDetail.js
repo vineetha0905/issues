@@ -217,7 +217,8 @@ const IssueDetail = ({ user, isAdmin }) => {
     const statusConfig = {
       'reported': { bg: 'bg-red-50', text: 'text-red-700', label: 'REPORTED' },
       'in-progress': { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'IN PROGRESS' },
-      'resolved': { bg: 'bg-green-50', text: 'text-green-700', label: 'RESOLVED' }
+      'resolved': { bg: 'bg-green-50', text: 'text-green-700', label: 'RESOLVED' },
+      'closed': { bg: 'bg-gray-50', text: 'text-gray-700', label: 'CLOSED' }
     };
     const config = statusConfig[status] || statusConfig['reported'];
     return (
@@ -403,21 +404,45 @@ const IssueDetail = ({ user, isAdmin }) => {
 
           {!isAdmin && (
             <div className="flex gap-3 pt-4 border-t border-gray-200">
-              <button
-                onClick={handleUpvote}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                  isUpvoted
-                    ? 'bg-blue-600 text-white hover:bg-blue-700'
-                    : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <ThumbsUp size={16} />
-                {issue.upvotes} {isUpvoted ? 'Upvoted' : 'Upvote'}
-              </button>
-              <button className="px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2">
-                <MessageCircle size={16} />
-                Comment
-              </button>
+              {issue.status === 'resolved' && user && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you satisfied with the resolution? This will close the issue.')) {
+                      try {
+                        await apiService.closeIssue(issue.id);
+                        toast.success('Issue closed successfully');
+                        navigate('/citizen');
+                      } catch (error) {
+                        console.error('Error closing issue:', error);
+                        toast.error('Failed to close issue. Please try again.');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
+                >
+                  <CheckCircle size={16} />
+                  Acknowledge & Close Issue
+                </button>
+              )}
+              {issue.status !== 'resolved' && (
+                <>
+                  <button
+                    onClick={handleUpvote}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      isUpvoted
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <ThumbsUp size={16} />
+                    {issue.upvotes} {isUpvoted ? 'Upvoted' : 'Upvote'}
+                  </button>
+                  <button className="px-4 py-2 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center gap-2">
+                    <MessageCircle size={16} />
+                    Comment
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

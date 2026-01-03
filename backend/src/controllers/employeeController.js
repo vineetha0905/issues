@@ -144,6 +144,7 @@ class EmployeeController {
         .populate('reportedBy', 'name email profileImage')
         .populate('assignedTo', 'name email employeeId role')
         .populate('assignedBy', 'name email employeeId')
+        .populate('acceptedBy', 'name email employeeId')
         .sort({ priority: -1, createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit));
@@ -168,6 +169,123 @@ class EmployeeController {
     }
   }
 
+  // Accept issue (exclusive lock - only one employee can accept)
+  async acceptIssue(req, res) {
+    try {
+      const { id } = req.params;
+      const user = req.user;
+
+      // Verify user is an employee
+      const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
+      if (!employeeRoles.includes(user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only employees can accept issues'
+        });
+      }
+
+      // Check if issue exists
+      const issue = await Issue.findById(id);
+      if (!issue) {
+        return res.status(404).json({
+          success: false,
+          message: 'Issue not found'
+        });
+      }
+
+      // If issue is assigned to a specific employee (not department), only that employee can accept
+      if (issue.assignedTo && issue.assignedTo.toString() !== user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'This issue is assigned to another employee. Only the assigned employee can accept it.'
+        });
+      }
+
+      // Atomic update: only accept if status is 'reported' or 'assigned' and not already accepted
+      // Note: 'in-progress' status should not be accepted (only 'reported' and 'assigned' can be accepted)
+      const result = await Issue.updateOne(
+        {
+          _id: id,
+          status: { $in: ['reported', 'assigned'] },
+          acceptedBy: null, // Ensure it's not already accepted
+          $or: [
+            { assignedTo: null }, // Department-assigned (assignedRole exists but assignedTo is null)
+            { assignedTo: user._id } // Specifically assigned to this user
+          ]
+        },
+        {
+          $set: {
+            status: 'in-progress', // After acceptance, status becomes 'in-progress'
+            acceptedBy: user._id,
+            acceptedAt: new Date(),
+            // If not already assigned, assign to this employee
+            assignedTo: user._id,
+            assignedBy: issue.assignedBy || user._id,
+            assignedAt: issue.assignedAt || new Date()
+          }
+        }
+      );
+
+      if (result.matchedCount === 0) {
+        // Re-fetch to check current state
+        const currentIssue = await Issue.findById(id);
+        if (!currentIssue) {
+          return res.status(404).json({
+            success: false,
+            message: 'Issue not found'
+          });
+        }
+
+        // Check if already accepted
+        if (currentIssue.acceptedBy) {
+          return res.status(400).json({
+            success: false,
+            message: 'This issue has already been accepted by another employee.'
+          });
+        }
+
+        // Check if status doesn't allow acceptance
+        if (!['reported', 'assigned'].includes(currentIssue.status)) {
+          return res.status(400).json({
+            success: false,
+            message: `This issue cannot be accepted. Current status: ${currentIssue.status}. Only 'reported' or 'assigned' issues can be accepted.`
+          });
+        }
+        
+        // Check if assigned to someone else
+        if (currentIssue.assignedTo && currentIssue.assignedTo.toString() !== user._id.toString()) {
+          return res.status(403).json({
+            success: false,
+            message: 'This issue is assigned to another employee. Only the assigned employee can accept it.'
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          message: 'Unable to accept issue. Please try again.'
+        });
+      }
+
+      // Fetch the updated issue
+      const updatedIssue = await Issue.findById(id)
+        .populate('reportedBy', 'name email')
+        .populate('acceptedBy', 'name email');
+
+      return res.json({
+        success: true,
+        message: 'Issue accepted successfully',
+        data: { issue: updatedIssue }
+      });
+    } catch (error) {
+      console.error('Accept issue error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error accepting issue',
+        error: error.message
+      });
+    }
+  }
+
   async resolveIssue(req, res) {
     try {
       const { id } = req.params;
@@ -178,57 +296,27 @@ class EmployeeController {
         return res.status(404).json({ success: false, message: 'Issue not found' });
       }
 
-      // Authorization: allow if admin OR assigned to user OR department-assigned OR role-based access
+      // STRICT AUTHORIZATION: ONLY the employee who accepted the issue can resolve it
       const user = req.user;
-      const employeeRoles = ['field-staff', 'supervisor', 'commissioner', 'employee'];
-      const isAssignedToUser = issue.assignedTo?.toString() === user._id.toString();
+      const isAcceptedByUser = issue.acceptedBy?.toString() === user._id.toString();
       const isAdmin = user.role === 'admin';
       
-      // Check if issue is assigned to department (assignedRole exists but assignedTo is null)
-      const isAssignedToDepartment = issue.assignedRole && !issue.assignedTo;
-      
-      let isAuthorized = isAdmin || isAssignedToUser;
-      
-      if (!isAuthorized && employeeRoles.includes(user.role)) {
-        // Check department access
-        const userDepartments = user.departments && user.departments.length > 0 
-          ? user.departments 
-          : (user.department ? [user.department] : []);
-        
-        // If issue is assigned to department and user's department matches, allow resolution
-        if (isAssignedToDepartment && (userDepartments.includes('All') || userDepartments.includes(issue.category))) {
-          isAuthorized = true;
+      // If issue is accepted, ONLY the accepting employee can resolve it (or admin)
+      if (issue.acceptedBy) {
+        if (!isAdmin && !isAcceptedByUser) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Only the employee who accepted this issue can resolve it.' 
+          });
         }
-        
-        // Also allow if user's department matches issue category (for backward compatibility)
-        if (userDepartments.includes('All') || userDepartments.includes(issue.category)) {
-          isAuthorized = true;
-        }
-        
-        // Commissioner can resolve any issue
-        if (user.role === 'commissioner') {
-          isAuthorized = true;
-        }
-        
-        // Supervisor can resolve escalated issues from their department
-        if (user.role === 'supervisor' && issue.status === 'escalated' && 
-            issue.assignedRole === 'field-staff' && 
-            (userDepartments.includes('All') || userDepartments.includes(issue.category))) {
-          isAuthorized = true;
-        }
-      }
-      
-      if (!isAuthorized) {
-        return res.status(403).json({ success: false, message: 'Not authorized to resolve this issue' });
+      } else {
+        // If not accepted yet, issue must be accepted first
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Issue must be accepted before it can be resolved.' 
+        });
       }
 
-      // If issue is assigned to department (not a specific user), assign it to current employee when they resolve it
-      // This provides accountability - the employee who resolves becomes the assigned employee
-      if (!isAssignedToUser && isAssignedToDepartment) {
-        issue.assignedTo = req.user._id;
-        issue.assignedBy = req.user._id;
-        issue.assignedAt = new Date();
-      }
 
       // Attach resolved photo if provided via upload middleware
       if (req.file) {
@@ -277,7 +365,7 @@ class EmployeeController {
 
       const oldStatus = issue.status;
       
-      // If transitioning to resolved, award points and delete (don't save issue)
+      // If transitioning to resolved, award points and update status (keep issue visible)
       if (oldStatus !== 'resolved') {
         // Award points first
         if (issue.reportedBy && !issue.pointsAwarded) {
@@ -300,27 +388,17 @@ class EmployeeController {
             });
           }
         }
-        
-        // Delete issue immediately (don't save it first)
-        try {
-          await issue.deleteOne();
-          console.log(`Issue ${issue._id} deleted after resolution`);
-          return res.json({ 
-            success: true, 
-            message: 'Issue resolved and deleted successfully', 
-            data: { deleted: true } 
-          });
-        } catch (deleteError) {
-          console.error('Error deleting resolved issue:', deleteError);
-          return res.status(500).json({
-            success: false,
-            message: 'Failed to delete resolved issue',
-            error: deleteError.message
-          });
-        }
       }
       
-      // If already resolved, proceed with normal update
+      // Only in-progress issues can be resolved (after employee accepts)
+      if (issue.status !== 'in-progress') {
+        return res.status(400).json({
+          success: false,
+          message: `Issue must be in-progress before resolution. Current status: ${issue.status}`
+        });
+      }
+
+      // Update issue status to resolved and save (do NOT delete - keep visible for citizen)
       issue.resolvedAt = new Date();
       issue.status = 'resolved';
       issue.resolved = issue.resolved || {};

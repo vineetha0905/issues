@@ -12,6 +12,9 @@ router.use(requireRoles(['field-staff', 'supervisor', 'commissioner', 'employee'
 // List issues for employee's department and assignments
 router.get('/issues', validatePagination, employeeController.listAssignedIssues);
 
+// Accept an issue (exclusive lock)
+router.post('/issues/:id/accept', validateObjectId('id'), employeeController.acceptIssue);
+
 // Resolve an issue (upload image optional)
 router.put('/issues/:id/resolve', validateObjectId('id'), uploadImage, validateFileType, employeeController.resolveIssue);
 

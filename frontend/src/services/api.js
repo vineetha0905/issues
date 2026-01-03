@@ -306,6 +306,14 @@ class ApiService {
     return this.handleResponse(response);
   }
 
+  async closeIssue(id) {
+    const response = await fetch(`${this.baseURL}/issues/${id}/close`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
   async getLeaderboard() {
     const response = await fetch(`${this.baseURL}/issues/leaderboard`, {
       headers: this.getAuthHeaders()
@@ -327,6 +335,14 @@ class ApiService {
       `${this.baseURL}/employee/issues${queryString ? `?${queryString}` : ''}`,
       { headers: this.getAuthHeaders() }
     );
+    return this.handleResponse(response);
+  }
+
+  async acceptIssue(issueId) {
+    const response = await fetch(`${this.baseURL}/employee/issues/${issueId}/accept`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
     return this.handleResponse(response);
   }
 

@@ -63,7 +63,8 @@ const MyReports = ({ user }) => {
     const statusConfig = {
       'reported': { class: 'status-reported', text: 'Reported' },
       'in-progress': { class: 'status-in-progress', text: 'In Progress' },
-      'resolved': { class: 'status-resolved', text: 'Resolved' }
+      'resolved': { class: 'status-resolved', text: 'Resolved' },
+      'closed': { class: 'status-closed', text: 'Closed' }
     };
     
     const config = statusConfig[status] || statusConfig['reported'];
@@ -348,31 +349,29 @@ const MyReports = ({ user }) => {
                       color: '#16a34a',
                       marginBottom: '1rem'
                     }}>
-                      This issue has been marked as resolved. Are you satisfied with the resolution?
+                      This issue has been marked as resolved. You can acknowledge and close it when you're satisfied.
                     </p>
-                    <div style={{ 
-                      display: 'flex', 
-                      gap: '0.5rem' 
-                    }}>
-                      <button 
-                        className="btn-primary" 
-                        style={{ 
-                          fontSize: '0.8rem',
-                          padding: '0.5rem 1rem'
-                        }}
-                      >
-                        Yes, Satisfied
-                      </button>
-                      <button 
-                        className="btn-secondary" 
-                        style={{ 
-                          fontSize: '0.8rem',
-                          padding: '0.5rem 1rem'
-                        }}
-                      >
-                        Not Satisfied
-                      </button>
-                    </div>
+                    <button 
+                      className="btn-primary" 
+                      style={{ 
+                        fontSize: '0.8rem',
+                        padding: '0.5rem 1rem'
+                      }}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (window.confirm('Are you satisfied with the resolution? This will close the issue.')) {
+                          try {
+                            await apiService.closeIssue(issue._id || issue.id);
+                            fetchUserIssues(); // Refresh the list
+                          } catch (error) {
+                            console.error('Error closing issue:', error);
+                            alert('Failed to close issue. Please try again.');
+                          }
+                        }
+                      }}
+                    >
+                      Acknowledge & Close Issue
+                    </button>
                   </div>
                 )}
               </div>

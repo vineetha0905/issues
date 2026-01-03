@@ -56,7 +56,7 @@ const issueSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['reported', 'in-progress', 'resolved', 'closed', 'escalated'],
+    enum: ['reported', 'assigned', 'accepted', 'in-progress', 'resolved', 'closed', 'escalated'],
     default: 'reported'
   },
   priority: {
@@ -80,6 +80,15 @@ const issueSchema = new mongoose.Schema({
     default: null
   },
   assignedAt: {
+    type: Date,
+    default: null
+  },
+  acceptedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  acceptedAt: {
     type: Date,
     default: null
   },
@@ -300,7 +309,11 @@ issueSchema.methods.assign = function(assignedTo, assignedBy, assignedRole = nul
   this.assignedBy = assignedBy;
   this.assignedAt = new Date();
   this.assignedRole = assignedRole;
-  this.status = 'in-progress';
+  // Status must remain 'reported' - only employee acceptance can change it to 'in-progress'
+  // Keep current status if it exists, otherwise set to 'reported'
+  if (!this.status || this.status === 'reported') {
+    this.status = 'reported';
+  }
   
   // Calculate escalation deadline based on priority and role
   if (assignedRole && this.priority) {

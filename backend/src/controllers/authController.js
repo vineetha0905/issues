@@ -307,7 +307,7 @@ class AuthController {
 
       // Update login info
       user.lastLogin = new Date();
-      user.loginCount += 1;
+      user.loginCount = (user.loginCount || 0) + 1;
       await user.save();
 
       // Generate tokens
@@ -728,7 +728,7 @@ class AuthController {
           name: 'Demo Employee',
           employeeId,
           role: 'employee',
-          department: department || 'Road & Traffic',
+          department: 'Road & Traffic', // Default department for demo employee
           password: password || 'emp123',
           isVerified: true,
           isActive: true
@@ -759,7 +759,7 @@ class AuthController {
       }
 
       user.lastLogin = new Date();
-      user.loginCount += 1;
+      user.loginCount = (user.loginCount || 0) + 1;
       await user.save();
 
       const token = generateToken(user._id);

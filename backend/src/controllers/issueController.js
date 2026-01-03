@@ -215,6 +215,61 @@ class IssueController {
   }
 
   // ===============================
+  // CLOSE ISSUE (Citizen acknowledges resolution)
+  // ===============================
+  async closeIssue(req, res) {
+    try {
+      const { id } = req.params;
+      const issue = await Issue.findById(id);
+      
+      if (!issue) {
+        return res.status(404).json({
+          success: false,
+          message: 'Issue not found'
+        });
+      }
+
+      // Only the reporter can close their own resolved issue
+      if (issue.reportedBy.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the reporter can close this issue'
+        });
+      }
+
+      // Only resolved issues can be closed
+      if (issue.status !== 'resolved') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only resolved issues can be closed'
+        });
+      }
+
+      // Update status to closed and set closedAt timestamp
+      issue.status = 'closed';
+      issue.closedAt = new Date();
+      await issue.save();
+
+      // Delete the issue after it's been closed
+      await issue.deleteOne();
+      console.log(`Issue ${issue._id} closed and deleted by citizen ${req.user._id}`);
+
+      return res.json({
+        success: true,
+        message: 'Issue closed successfully',
+        data: { deleted: true }
+      });
+    } catch (error) {
+      console.error('Close issue error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Server error closing issue',
+        error: error.message
+      });
+    }
+  }
+
+  // ===============================
   // GET ISSUES FOR A SPECIFIC USER
   // ===============================
   async getUserIssues(req, res) {
@@ -445,7 +500,8 @@ class IssueController {
         isAnonymous,
         reportedBy: req.user._id,
         images,
-        documents: req.files?.documents || []
+        documents: req.files?.documents || [],
+        status: 'reported' // Explicitly set status to 'reported' - must stay 'reported' until employee accepts
       });
 
       await issue.save();
@@ -470,12 +526,13 @@ class IssueController {
           // Assign to department (not a specific user) - this allows all employees in department to see it
           const assignedRole = 'field-staff';
           
-          // Set assignedRole and status, but leave assignedTo as null
-          // This way all employees in the department can see and resolve the issue
+          // Set assignedRole, but leave assignedTo as null and status MUST remain 'reported'
+          // CRITICAL: Status must stay 'reported' - only employee acceptance can change it to 'in-progress'
           issue.assignedRole = assignedRole;
           issue.assignedBy = req.user._id; // Admin or system
           issue.assignedAt = new Date();
-          issue.status = 'in-progress';
+          // DO NOT change status - keep it as 'reported'
+          issue.status = 'reported'; // Ensure status is 'reported' - employees must accept to change to 'in-progress'
           
           // Calculate escalation deadline based on priority and role
           if (issue.priority) {
@@ -526,6 +583,15 @@ class IssueController {
       if (req.user.role !== 'admin' &&
           issue.reportedBy.toString() !== req.user._id.toString()) {
         return res.status(403).json({ success: false });
+      }
+
+      // STRICT RULE: Prevent changing status to 'in-progress' via updateIssue
+      // Only employee acceptance can change status from 'reported' to 'in-progress'
+      if (req.body.status === 'in-progress' && req.user.role !== 'employee') {
+        return res.status(403).json({ 
+          success: false,
+          message: 'Status cannot be set to in-progress via update. Only employees can accept issues to change status to in-progress.'
+        });
       }
 
       Object.assign(issue, req.body);

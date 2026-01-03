@@ -116,6 +116,8 @@ const AdminDashboard = ({ user }) => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       'reported': { class: 'status-reported', text: 'Reported' },
+      'assigned': { class: 'status-in-progress', text: 'Assigned' },
+      'accepted': { class: 'status-in-progress', text: 'Accepted' },
       'in-progress': { class: 'status-in-progress', text: 'In Progress' },
       'resolved': { class: 'status-resolved', text: 'Resolved' }
     };
@@ -339,7 +341,20 @@ const AdminDashboard = ({ user }) => {
                           <button 
                             className="btn-secondary"
                             style={{ fontSize: '0.7rem', padding: '0.3rem 0.8rem' }}
-                            onClick={(e) => handleAssignIssue(issue._id || issue.id, e)}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const employeeId = prompt('Enter Employee ID to assign (or leave empty for auto-assign):');
+                              if (employeeId !== null) {
+                                try {
+                                  await apiService.assignIssue(issue._id || issue.id, { assignedTo: employeeId || null });
+                                  toast.success('Issue assigned');
+                                  const fresh = await apiService.getAdminDashboard();
+                                  setStats(fresh.data || fresh);
+                                } catch (err) {
+                                  toast.error(`Assign failed: ${err.message}`);
+                                }
+                              }
+                            }}
                           >
                             Assign
                           </button>
@@ -502,13 +517,34 @@ const AdminDashboard = ({ user }) => {
                       <td style={{ padding: '1rem 0.8rem', fontSize: '0.9rem', color: '#64748b' }}>
                         {issue.assignedTo?.name || 'Unassigned'}
                       </td>
-                      <td style={{ padding: '1rem 0.8rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <td 
+                        style={{ padding: '1rem 0.8rem' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                           {issue.status === 'reported' && (
                             <button 
                               className="btn-secondary"
-                              style={{ fontSize: '0.7rem', padding: '0.3rem 0.6rem' }}
-                              onClick={(e) => handleAssignIssue(issue._id || issue.id, e)}
+                              style={{ 
+                                fontSize: '0.75rem', 
+                                padding: '0.4rem 0.8rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap'
+                              }}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const employeeId = prompt('Enter Employee ID to assign (or leave empty for auto-assign):');
+                                if (employeeId !== null) {
+                                  try {
+                                    await apiService.assignIssue(issue._id || issue.id, { assignedTo: employeeId || null });
+                                    toast.success('Issue assigned');
+                                    const fresh = await apiService.getAdminDashboard();
+                                    setStats(fresh.data || fresh);
+                                  } catch (err) {
+                                    toast.error(`Assign failed: ${err.message}`);
+                                  }
+                                }
+                              }}
                             >
                               Assign
                             </button>

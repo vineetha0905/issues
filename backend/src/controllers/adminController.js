@@ -355,12 +355,16 @@ class AdminController {
         // Set assignedRole to 'field-staff' to indicate it's assigned to field staff level
         const assignedRole = 'field-staff';
         
-        // Update issue: set status to in-progress, assignedRole, but leave assignedTo as null
+        // Update issue: set assignedRole, but keep status as 'reported'
+        // Status must remain 'reported' until employee accepts it
         // This way all employees in the department can see it
         issue.assignedRole = assignedRole;
         issue.assignedBy = req.user._id;
         issue.assignedAt = new Date();
-        issue.status = 'in-progress';
+        // Status stays 'reported' - only employee acceptance can change it to 'in-progress'
+        if (issue.status === 'reported' || !issue.status) {
+          issue.status = 'reported';
+        }
         
         // Calculate escalation deadline based on priority and role
         if (issue.priority) {
@@ -442,6 +446,15 @@ class AdminController {
         });
       }
 
+      // STRICT RULE: Admin CANNOT set status to 'in-progress'
+      // Only employee acceptance can change status from 'reported' to 'in-progress'
+      if (status === 'in-progress') {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin cannot set issue status to in-progress. Only employees can accept issues to change status to in-progress.'
+        });
+      }
+
       const issue = await Issue.findById(id);
       if (!issue) {
         return res.status(404).json({
@@ -452,7 +465,7 @@ class AdminController {
 
       const oldStatus = issue.status;
       
-      // For non-resolved status updates, proceed normally
+      // For non-resolved and non-in-progress status updates, proceed normally
       issue.status = status;
 
       await issue.save();

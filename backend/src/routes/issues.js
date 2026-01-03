@@ -87,6 +87,16 @@ router.delete(
 );
 
 /* ===============================
+   CLOSE ISSUE (Citizen acknowledges resolution)
+================================ */
+router.put(
+  '/:id/close',
+  authenticate,
+  validateObjectId('id'),
+  safe(issueController.closeIssue)
+);
+
+/* ===============================
    UPVOTING
 ================================ */
 router.post(
