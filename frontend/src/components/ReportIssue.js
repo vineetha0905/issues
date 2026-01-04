@@ -23,6 +23,59 @@ const ReportIssue = ({ user }) => {
   const lastTranscriptTitleRef = useRef('');
   const lastTranscriptDescRef = useRef('');
 
+  // Translation function using Google Translate free endpoint
+  const translateToEnglish = async (text) => {
+    if (!text || !text.trim()) return text;
+    
+    try {
+      // First try with auto-detect (works best for most languages including Telugu)
+      const response = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`Translation API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Extract translated text from the response
+      if (data && data[0] && Array.isArray(data[0]) && data[0].length > 0) {
+        let translatedText = '';
+        for (let i = 0; i < data[0].length; i++) {
+          if (data[0][i] && data[0][i][0]) {
+            translatedText += data[0][i][0];
+          }
+        }
+        translatedText = translatedText.trim();
+        
+        // Always return the translated text (even if same, as it might already be English)
+        if (translatedText) {
+          console.log('Translation result:', { original: text, translated: translatedText });
+          return translatedText;
+        }
+      }
+      
+      // If extraction failed, try alternative parsing
+      console.warn('Primary translation parsing failed, trying alternative...');
+      if (data && data[0]) {
+        const altText = String(data[0]).trim();
+        if (altText && altText !== text) {
+          console.log('Alternative translation result:', { original: text, translated: altText });
+          return altText;
+        }
+      }
+      
+      // Fallback: return original text
+      console.warn('Translation extraction failed, returning original text:', text);
+      return text;
+    } catch (error) {
+      console.error('Translation error:', error);
+      toast.warning('Translation unavailable. Using recognized text as-is.');
+      return text;
+    }
+  };
+
   const ensureSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -31,10 +84,12 @@ const ReportIssue = ({ user }) => {
     }
     if (!recognitionRef.current) {
       const recognition = new SpeechRecognition();
-      recognition.lang = 'en-IN';
+      // Support multiple languages - try Telugu first, fallback to auto-detect
+      // Telugu (te-IN) ensures proper recognition of Telugu speech
+      recognition.lang = 'te-IN,hi-IN,en-IN'; // Support Telugu, Hindi, English (India)
       recognition.interimResults = false; // only final results to avoid repetition
       recognition.continuous = true;
-      recognition.onresult = (event) => {
+      recognition.onresult = async (event) => {
         let transcript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
@@ -43,27 +98,44 @@ const ReportIssue = ({ user }) => {
         }
         transcript = transcript.trim();
         if (!transcript) return;
+        
+        console.log('Recognized text (before translation):', transcript);
+        
+        // Translate to English immediately after recognition
+        const translatedText = await translateToEnglish(transcript);
+        
+        console.log('Translated text (after translation):', translatedText);
+        
+        // Only store and display the English translated text
         if (targetRef.current === 'title') {
-          if (transcript === lastTranscriptTitleRef.current) return;
-          lastTranscriptTitleRef.current = transcript;
+          if (translatedText === lastTranscriptTitleRef.current) return;
+          lastTranscriptTitleRef.current = translatedText;
           setReportData(prev => ({
             ...prev,
-            title: (prev.title ? (prev.title.trim() + ' ') : '') + transcript
+            title: (prev.title ? (prev.title.trim() + ' ') : '') + translatedText
           }));
         } else {
-          if (transcript === lastTranscriptDescRef.current) return;
-          lastTranscriptDescRef.current = transcript;
+          if (translatedText === lastTranscriptDescRef.current) return;
+          lastTranscriptDescRef.current = translatedText;
           setReportData(prev => ({
             ...prev,
-            description: (prev.description ? (prev.description.trim() + ' ') : '') + transcript
+            description: (prev.description ? (prev.description.trim() + ' ') : '') + translatedText
           }));
         }
       };
       recognition.onend = () => {
         setIsListening(false);
       };
-      recognition.onerror = () => {
+      recognition.onerror = (error) => {
+        console.error('Speech recognition error:', error);
         setIsListening(false);
+        if (error.error === 'not-allowed') {
+          toast.error('Microphone permission denied. Please allow microphone access.');
+        } else if (error.error === 'no-speech') {
+          toast.warning('No speech detected. Please try again.');
+        } else {
+          toast.error('Speech recognition error. Please try again.');
+        }
       };
       recognitionRef.current = recognition;
     }

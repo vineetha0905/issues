@@ -399,6 +399,7 @@ body {
   display: flex;
   justify-content: space-around;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  z-index: 1000;
 }
 
 .nav-item {
@@ -411,6 +412,9 @@ body {
   transition: all 0.3s ease;
   font-size: 0.8rem;
   font-weight: 500;
+  cursor: pointer;
+  min-width: 0;
+  flex: 1;
 }
 
 .nav-item.active {
@@ -732,6 +736,35 @@ body {
     margin-bottom: 5rem;
     gap: 0.875rem;
     max-width: 100%;
+    padding-bottom: 1rem;
+  }
+  
+  /* Ensure dashboard container has proper padding for bottom nav on mobile */
+  .dashboard-container {
+    padding-bottom: 90px !important;
+  }
+  
+  /* Bottom navigation mobile fixes */
+  .bottom-nav {
+    z-index: 1000;
+    padding: 0.75rem 0.5rem;
+    min-height: 70px;
+  }
+  
+  .nav-item {
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    padding: 0.25rem;
+    flex: 1;
+    max-width: 20%;
+  }
+  
+  .nav-item span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    text-align: center;
   }
   
   .action-card {
@@ -908,18 +941,43 @@ body {
     height: 280px;
   }
   
+  /* Bottom navigation small mobile fixes */
   .bottom-nav {
-    padding: 0.5rem 0.25rem;
+    padding: 0.6rem 0.25rem;
+    min-height: 65px;
+    z-index: 1000;
   }
   
   .nav-item {
-    padding: 0.5rem 0.25rem;
-    font-size: 0.75rem;
+    padding: 0.25rem 0.15rem;
+    font-size: 0.7rem;
+    gap: 0.2rem;
+    flex: 1;
+    max-width: 20%;
   }
   
   .nav-item svg {
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
+  }
+  
+  .nav-item span {
+    font-size: 0.65rem;
+    line-height: 1.2;
+  }
+  
+  /* Ensure content doesn't overlap navbar on small screens */
+  .dashboard-container {
+    padding-bottom: 80px !important;
+  }
+  
+  .dashboard-content-section {
+    padding-bottom: 1rem !important;
+  }
+  
+  .form-container {
+    padding-bottom: 80px !important;
   }
 }
 
