@@ -19,12 +19,13 @@ const isValidUrlString = (value) => {
 /**
  * Gets the image URL for an issue/report with fallback to placeholder
  * @param {Object} issue - The issue/report object
+ * @param {boolean} silent - If true, suppress warnings for expected empty arrays (default: false)
  * @returns {string} Image URL or placeholder URL
  */
-export const getIssueImageUrl = (issue) => {
+export const getIssueImageUrl = (issue, silent = false) => {
   try {
     if (!issue) {
-      console.warn('[imageUtils] No issue provided');
+      if (!silent) console.warn('[imageUtils] No issue provided');
       return DEFAULT_PLACEHOLDER_IMAGE;
     }
     
@@ -39,17 +40,18 @@ export const getIssueImageUrl = (issue) => {
         // Check if it's a single image object
         if (issue.images.url || issue.images.secure_url || issue.images.imageUrl) {
           imagesArray = [issue.images]; // Wrap single object in array
-          console.log('[imageUtils] ⚠ issue.images is object (not array), wrapping it:', issue.images);
+          if (!silent) console.log('[imageUtils] ⚠ issue.images is object (not array), wrapping it');
         } else if (issue.images.images && Array.isArray(issue.images.images)) {
           // Check if there's an 'images' property inside the object
           imagesArray = issue.images.images;
-          console.log('[imageUtils] ⚠ issue.images is object with nested images array');
+          if (!silent) console.log('[imageUtils] ⚠ issue.images is object with nested images array');
         } else {
-          // Unknown object structure
-          console.warn('[imageUtils] ✗ issue.images is object but no valid structure found:', {
-            keys: Object.keys(issue.images),
-            value: issue.images
-          });
+          // Unknown object structure - only log if not silent
+          if (!silent) {
+            console.warn('[imageUtils] ✗ issue.images is object but no valid structure found:', {
+              keys: Object.keys(issue.images).slice(0, 5)
+            });
+          }
           imagesArray = [];
         }
       }
@@ -60,7 +62,10 @@ export const getIssueImageUrl = (issue) => {
         
         // If first item is a string (URL), use it directly
         if (typeof first === 'string' && isValidUrlString(first)) {
-          console.log('[imageUtils] ✓ Found image from issue.images[0] (string):', first.substring(0, 50) + '...');
+          // Only log in non-silent mode
+          if (!silent && process.env.NODE_ENV === 'development') {
+            console.log('[imageUtils] ✓ Found image from issue.images[0] (string)');
+          }
           return first;
         }
         
@@ -70,34 +75,29 @@ export const getIssueImageUrl = (issue) => {
           const url = first.url || first.secure_url || first.secureUrl || first.imageUrl || first.path || first.src || first.image;
           
           if (isValidUrlString(url)) {
-            const urlPreview = url.length > 50 ? url.substring(0, 50) + '...' : url;
-            console.log('[imageUtils] ✓ Found image from issue.images[0].url:', urlPreview);
+            // Only log in non-silent mode and dev
+            if (!silent && process.env.NODE_ENV === 'development') {
+              console.log('[imageUtils] ✓ Found image from issue.images[0].url');
+            }
             return url;
           } else {
-            // Log more details for debugging
-            console.warn('[imageUtils] ✗ images[0] object exists but no valid URL found:', {
-              hasUrl: !!first.url,
-              urlValue: first.url,
-              hasSecureUrl: !!first.secure_url,
-              secureUrlValue: first.secure_url,
-              hasImageUrl: !!first.imageUrl,
-              imageUrlValue: first.imageUrl,
-              objectKeys: Object.keys(first),
-              fullObject: first
-            });
+            // Only log warnings if not silent - this indicates a real problem
+            if (!silent) {
+              console.warn('[imageUtils] ✗ images[0] object exists but no valid URL found:', {
+                hasUrl: !!first.url,
+                hasSecureUrl: !!first.secure_url,
+                objectKeys: Object.keys(first).slice(0, 5)
+              });
+            }
           }
         }
-      } else if (Array.isArray(imagesArray) && imagesArray.length === 0) {
-        console.warn('[imageUtils] ✗ issue.images is an empty array');
-      } else {
-        console.warn('[imageUtils] ✗ issue.images exists but is not a valid array:', {
-          isArray: Array.isArray(issue.images),
-          isObject: typeof issue.images === 'object' && issue.images !== null,
+      }
+      // Empty array is expected behavior - don't log warnings
+      // Only log if there's an unexpected structure (not an array)
+      if (!Array.isArray(imagesArray) && !silent) {
+        console.warn('[imageUtils] ✗ issue.images is not a valid array:', {
           type: typeof issue.images,
-          constructor: issue.images?.constructor?.name,
-          length: Array.isArray(issue.images) ? issue.images.length : 'N/A',
-          value: issue.images,
-          stringified: JSON.stringify(issue.images)?.substring(0, 200)
+          constructor: issue.images?.constructor?.name
         });
       }
     }
@@ -120,25 +120,21 @@ export const getIssueImageUrl = (issue) => {
       return issue.imagePath;
     }
     
-    // Debug: log what we found
-    console.warn('[imageUtils] ✗ No valid image found. Issue structure:', {
-      issueId: issue._id || issue.id,
-      hasImage: !!issue.image,
-      imageValue: issue.image,
-      hasImageUrl: !!issue.imageUrl,
-      imageUrlValue: issue.imageUrl,
-      hasPhoto: !!issue.photo,
-      hasImagePath: !!issue.imagePath,
-      hasImages: issue.images !== undefined && issue.images !== null,
-      imagesValue: issue.images,
-      imagesType: typeof issue.images,
-      imagesIsArray: Array.isArray(issue.images),
-      imagesConstructor: issue.images?.constructor?.name,
-      imagesArrayLength: Array.isArray(issue.images) ? issue.images.length : 'N/A',
-      imagesArrayFirst: Array.isArray(issue.images) && issue.images.length > 0 ? issue.images[0] : null,
-      imagesStringified: issue.images ? JSON.stringify(issue.images).substring(0, 200) : 'null/undefined',
-      allKeys: Object.keys(issue).slice(0, 20) // First 20 keys for debugging
-    });
+    // No image found - this is expected for issues without images
+    // Only log debug info if not silent and in development mode
+    if (!silent && process.env.NODE_ENV === 'development') {
+      // Only log if we actually expected an image (e.g., images array exists but is malformed)
+      const hasImagesField = issue.images !== undefined && issue.images !== null;
+      if (hasImagesField && !Array.isArray(issue.images)) {
+        // Unexpected structure - log this
+        console.warn('[imageUtils] ✗ Unexpected images structure:', {
+          issueId: issue._id || issue.id,
+          imagesType: typeof issue.images,
+          constructor: issue.images?.constructor?.name
+        });
+      }
+      // Otherwise, empty array is expected - don't log
+    }
     
     // No image found, return placeholder
     return DEFAULT_PLACEHOLDER_IMAGE;

@@ -150,21 +150,22 @@ const MyReports = ({ user }) => {
                 onClick={() => navigate(`/issue/${issue._id || issue.id}`)}
               >
                 {(() => {
-                  const imageUrl = getIssueImageUrl(issue);
-                  // Debug log for first issue
-                  if (issue._id === (userIssues[0]?._id || userIssues[0]?.id)) {
-                    console.log('[MyReports] Rendering first issue:', {
-                      issueId: issue._id || issue.id,
-                      imageUrl: imageUrl.substring(0, 100),
-                      isPlaceholder: imageUrl === DEFAULT_PLACEHOLDER_IMAGE,
-                      imagesArray: issue.images,
-                      imagesArrayLength: Array.isArray(issue.images) ? issue.images.length : 'N/A'
-                    });
-                  }
+                  // Get image URL silently (no console warnings for expected empty arrays)
+                  const imageUrl = getIssueImageUrl(issue, true);
+                  const hasValidImage = imageUrl !== DEFAULT_PLACEHOLDER_IMAGE;
+                  
+                  // Check if issue actually has images
+                  const hasImagesArray = Array.isArray(issue.images) && issue.images.length > 0;
+                  const actualHasImage = hasImagesArray && (
+                    (typeof issue.images[0] === 'string' && issue.images[0] && issue.images[0].trim() !== '') ||
+                    (typeof issue.images[0] === 'object' && issue.images[0]?.url)
+                  );
+                  
                   const [lat, lng] = issue.location?.coordinates ? [
                     issue.location.coordinates.latitude,
                     issue.location.coordinates.longitude
                   ] : [];
+                  
                   return (
                     <div className="flex flex-col sm:flex-row gap-4">
                       <div className="flex-shrink-0 w-full sm:w-auto">
@@ -174,20 +175,34 @@ const MyReports = ({ user }) => {
                             alt={issue.title || 'Issue image'}
                             className="w-full h-full object-cover block"
                             onError={(e) => {
-                              console.error('[MyReports] Image failed to load:', imageUrl, 'Issue:', issue._id);
+                              // Only log actual load failures, not placeholder displays
+                              if (hasValidImage) {
+                                console.error('[MyReports] Image failed to load:', imageUrl?.substring(0, 50), 'Issue:', issue._id);
+                              }
                               e.target.src = DEFAULT_PLACEHOLDER_IMAGE;
                             }}
-                            onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
+                            onClick={(e) => { 
+                              if (hasValidImage) {
+                                e.stopPropagation(); 
+                                setPreviewUrl(imageUrl); 
+                              }
+                            }}
                           />
                         </div>
-                        <div className="flex justify-end mt-2">
-                          <button 
-                            className="bg-transparent text-[#1e4359] border-2 border-[#1e4359] px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-300 hover:bg-[#1e4359] hover:text-white"
-                            onClick={(e) => { e.stopPropagation(); setPreviewUrl(imageUrl); }}
-                          >
-                            View Image
-                          </button>
-                        </div>
+                        {/* Only show "View Image" button if there's an actual image */}
+                        {hasValidImage && (
+                          <div className="flex justify-end mt-2">
+                            <button 
+                              className="bg-transparent text-[#1e4359] border-2 border-[#1e4359] px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-300 hover:bg-[#1e4359] hover:text-white"
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setPreviewUrl(imageUrl); 
+                              }}
+                            >
+                              View Image
+                            </button>
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex-1 min-w-0">
