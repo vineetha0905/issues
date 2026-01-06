@@ -28,87 +28,109 @@ const Profile = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white shadow-xl rounded-2xl px-8 py-6 animate-pulse">Loading…</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f7fa]">
+        <div className="bg-white px-10 py-6 rounded-2xl shadow animate-pulse">
+          Loading profile…
+        </div>
       </div>
     );
   }
 
   if (!profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white shadow-xl rounded-2xl px-8 py-6">No profile found.</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#f4f7fa]">
+        <div className="bg-white px-10 py-6 rounded-2xl shadow">
+          No profile found.
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 flex justify-center py-12 px-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl p-8 transition-transform hover:scale-[1.01]">
-        
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-lg">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-8 h-8"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+    <div className="min-h-screen bg-[#f4f7fa]">
+
+      {/* ===== HEADER (standalone, no overlap) ===== */}
+      <header className="bg-gradient-to-r from-[#12394a] to-[#1f4f63]">
+        <div className="max-w-6xl mx-auto px-8 py-12">
+          <h1 className="text-4xl font-bold text-white tracking-tight">
+            My Profile
+          </h1>
+          <p className="mt-1 text-base text-blue-100 max-w-xl">
+            Official citizen identity information registered with CivicConnect
+          </p>
+        </div>
+      </header>
+
+      {/* ===== CARD SECTION (CLEARLY SEPARATED) ===== */}
+      <main className="flex justify-center px-6 py-16">
+        <div className="w-full max-w-4xl bg-white rounded-[28px] shadow-2xl p-12">
+
+          {error && (
+            <div className="mb-8 text-sm text-red-700 bg-red-50 px-5 py-3 rounded-xl border border-red-200">
+              {error}
+            </div>
+          )}
+
+          {/* Personal Identity */}
+          <section className="mb-12">
+            <h2 className="text-lg font-semibold text-[#12394a]">
+              Personal Identity
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Core citizen details used across the platform
+            </p>
+
+            <div className="mt-8 space-y-6">
+              <ProfileRow label="Full Name" value={profile.name} />
+              <ProfileRow label="Aadhaar Number" value={profile.aadhaarNumber} />
+              <ProfileRow label="Mobile Number" value={profile.mobile} />
+            </div>
+          </section>
+
+          {/* Platform Access */}
+          <section className="pt-8 border-t border-gray-200">
+            <h2 className="text-lg font-semibold text-[#12394a]">
+              Platform Access
+            </h2>
+
+            <div className="mt-6">
+              <ProfileRow label="Civic Role" value="Citizen" />
+            </div>
+          </section>
+
+          {/* Action */}
+          <div className="mt-14">
+            <button
+              onClick={() => navigate('/citizen')}
+              className="w-full py-4 rounded-xl
+                         bg-[#12394a] text-white
+                         text-lg font-semibold
+                         hover:bg-[#0f2f3d]
+                         transition-all"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+              Back to Dashboard
+            </button>
           </div>
 
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">My Profile</h1>
-            <p className="text-sm text-gray-500">Citizen information</p>
-          </div>
         </div>
-
-        {error && (
-          <div className="mb-4 text-sm text-red-600 bg-red-50 px-4 py-2 rounded-lg border border-red-200">
-            {error}
-          </div>
-        )}
-
-        {/* Profile Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="bg-gray-50 rounded-xl p-4 hover:shadow-md transition">
-            <label className="text-xs text-gray-500">Name</label>
-            <div className="text-lg font-medium text-gray-800 mt-1">
-              {profile.name || '-'}
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-xl p-4 hover:shadow-md transition">
-            <label className="text-xs text-gray-500">Aadhaar Number</label>
-            <div className="text-lg font-medium text-gray-800 mt-1">
-              {profile.aadhaarNumber || '-'}
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-xl p-4 hover:shadow-md transition">
-            <label className="text-xs text-gray-500">Mobile</label>
-            <div className="text-lg font-medium text-gray-800 mt-1">
-              {profile.mobile || '-'}
-            </div>
-          </div>
-        </div>
-
-        {/* Button */}
-        <div className="mt-8 flex justify-end">
-          <button
-            onClick={() => navigate('/citizen')}
-            className="px-6 py-2 rounded-full bg-indigo-600 text-white font-medium shadow-md hover:bg-indigo-700 hover:shadow-lg transition-all"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };
+
+const ProfileRow = ({ label, value }) => (
+  <div className="flex items-baseline justify-between">
+    <div className="flex items-baseline gap-4">
+      <span className="w-44 text-sm font-medium text-gray-500">
+        {label}
+      </span>
+      <span className="text-gray-400">:</span>
+    </div>
+
+    <span className="text-xl font-semibold text-[#12394a] tracking-tight">
+      {value || '-'}
+    </span>
+  </div>
+);
 
 export default Profile;
