@@ -2,7 +2,7 @@ services:
   - type: web
     name: civic-connect-ml
     env: python
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install python-multipart && pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 75 --access-log --log-level info
     envVars:
       - key: PORT
