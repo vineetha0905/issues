@@ -7,7 +7,8 @@ ENV PATH="/home/user/.local/bin:$PATH"
 WORKDIR /app
 
 COPY --chown=user ./requirements.txt requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir python-multipart && pip install --no-cache-dir -r requirements.txt
+# Install dependencies (python-multipart is already in requirements.txt)
+RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=user . /app
 
