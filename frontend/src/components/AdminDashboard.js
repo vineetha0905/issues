@@ -20,7 +20,7 @@ import {
   Save
 } from 'lucide-react';
 import IssueMap from './IssueMap';
-import ResolutionCharts from './analytics/ResolutionCharts';
+import Leaderboard from './Leaderboard';
 import apiService from '../services/api';
 
 const AdminDashboard = ({ user }) => {
@@ -238,7 +238,7 @@ const AdminDashboard = ({ user }) => {
             { key: 'issues', label: 'Issues Management', icon: AlertTriangle },
             { key: 'employees', label: 'Employees', icon: Users },
             { key: 'map', label: 'Map View', icon: MapPin },
-            { key: 'analytics', label: 'Analytics', icon: TrendingUp }
+            { key: 'leaderboard', label: 'Leaderboard', icon: TrendingUp }
           ].map(tab => (
             <button
               key={tab.key}
@@ -640,14 +640,10 @@ const AdminDashboard = ({ user }) => {
         {/* Employees Management */}
         {selectedView === 'employees' && <EmployeeManagement />}
 
-        {/* Analytics */}
-        {selectedView === 'analytics' && (
-          <div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '1.5rem', color: '#1e293b' }}>
-              Analytics Dashboard
-            </h3>
-            
-            <ResolutionCharts />
+        {/* Leaderboard */}
+        {selectedView === 'leaderboard' && (
+          <div style={{ maxWidth: '100%' }}>
+            <Leaderboard hideBackButton={true} />
           </div>
         )}
       </div>

@@ -311,56 +311,95 @@ class IssueController {
   // ===============================
   async getLeaderboard(req, res) {
     try {
-      const limit = parseInt(req.query.limit) || 10;
+      const limit = parseInt(req.query.limit) || 100;
       const currentUserId = req.user?._id?.toString();
+      const isAdmin = req.user?.role === 'admin';
       
-      // Get top users by points (citizens only)
-      // Ensure points field is treated as 0 if null/undefined, and sort by points descending
-      const topUsers = await User.find({ 
-        role: 'citizen',
-        name: { $exists: true, $ne: null }
-      })
-        .select('name points')
-        .sort({ points: -1 })
+      // Get all users with valid names, sorted by points descending
+      // For admin: show all users, for others: show only citizens
+      const userFilter = isAdmin 
+        ? { name: { $exists: true, $ne: null, $ne: '' } }
+        : { role: 'citizen', name: { $exists: true, $ne: null, $ne: '' } };
+      
+      // Use aggregation for efficient ranking with tie handling
+      // First, get all users sorted by points
+      const sortedUsers = await User.find(userFilter)
+        .select('name points role')
+        .sort({ points: -1, name: 1 }) // Secondary sort by name for stable ranking
         .limit(limit)
         .lean();
       
-      // Calculate current user's rank and get their data
+      // Manually assign ranks (users with same points get same rank)
+      let currentRank = 1;
+      let previousPoints = null;
+      const usersWithRank = sortedUsers.map((user, index) => {
+        const userPoints = user.points || 0;
+        
+        // If this user has different points than previous, update rank
+        if (previousPoints !== null && userPoints !== previousPoints) {
+          currentRank = index + 1;
+        }
+        
+        previousPoints = userPoints;
+        
+        return {
+          _id: user._id,
+          name: user.name,
+          points: userPoints,
+          role: user.role,
+          rank: currentRank
+        };
+      });
+      
+      // Format the response
+      const formatted = usersWithRank.map((user) => ({
+        rank: user.rank,
+        name: user.name || 'Unknown',
+        points: user.points || 0,
+        isCurrentUser: currentUserId && user._id.toString() === currentUserId
+      }));
+      
+      // Calculate current user's rank if they're not in the top list
       let currentUserData = null;
       if (currentUserId) {
         const currentUser = await User.findById(currentUserId)
-          .select('name points')
+          .select('name points role')
           .lean();
         
         if (currentUser) {
-          // Count how many users have more points than current user
-          const usersAbove = await User.countDocuments({
-            role: 'citizen',
-            points: { $gt: currentUser.points || 0 }
-          });
-          const userRank = usersAbove + 1;
+          // Check if user is already in the formatted list
+          const userInList = formatted.find(u => u.isCurrentUser);
           
-          currentUserData = {
-            rank: userRank,
-            name: currentUser.name,
-            points: currentUser.points || 0,
-            isCurrentUser: true
-          };
+          if (!userInList) {
+            // Count how many users have more points (or same points but earlier alphabetically)
+            const usersAbove = await User.countDocuments({
+              $and: [
+                userFilter,
+                {
+                  $or: [
+                    { points: { $gt: currentUser.points || 0 } },
+                    {
+                      points: currentUser.points || 0,
+                      name: { $lt: currentUser.name || '' }
+                    }
+                  ]
+                }
+              ]
+            });
+            const userRank = usersAbove + 1;
+            
+            currentUserData = {
+              rank: userRank,
+              name: currentUser.name || 'Unknown',
+              points: currentUser.points || 0,
+              isCurrentUser: true
+            };
+          } else {
+            // User is in the list, use their existing data
+            currentUserData = userInList;
+          }
         }
       }
-      
-      // Format response with rank - show ONLY top 10
-      // Ensure points are treated as 0 if null/undefined
-      const formatted = topUsers.map((user, index) => {
-        const userRank = index + 1;
-        const userPoints = (user.points !== null && user.points !== undefined) ? user.points : 0;
-        return {
-          rank: userRank,
-          name: user.name || 'Unknown',
-          points: userPoints,
-          isCurrentUser: currentUserId && user._id.toString() === currentUserId
-        };
-      });
       
       res.json({
         success: true,
@@ -718,6 +757,20 @@ class IssueController {
       console.log('[Backend createIssue] Issue saved successfully. ID:', issue._id);
       console.log('[Backend createIssue] Saved issue images (from DB):', JSON.stringify(issue.images, null, 2));
       
+      // Award points for reporting an issue (+5 points)
+      try {
+        const reporter = await User.findById(req.user._id);
+        if (reporter) {
+          const currentPoints = reporter.points || 0;
+          reporter.points = currentPoints + 5;
+          await reporter.save();
+          console.log(`✅ Awarded +5 points to user ${reporter._id} for reporting issue ${issue._id}. Points: ${currentPoints} → ${reporter.points}`);
+        }
+      } catch (pointsError) {
+        console.error('❌ Error awarding points for issue creation:', pointsError);
+        // Don't fail issue creation if points fail
+      }
+      
       await issue.populate('reportedBy', 'name email profileImage');
 
       // AUTO-ASSIGN TO DEPARTMENT: Automatically assign issue to all employees in the department
@@ -837,10 +890,35 @@ class IssueController {
   async upvoteIssue(req, res) {
     try {
       const issue = await Issue.findById(req.params.id);
+      if (!issue) {
+        return res.status(404).json({ success: false, message: 'Issue not found' });
+      }
+      
+      // Check if user already upvoted
+      const alreadyUpvoted = issue.upvotedBy.includes(req.user._id);
+      
       await issue.upvote(req.user._id);
+      
+      // Award points to the upvoter (+1 point per upvote)
+      if (!alreadyUpvoted) {
+        try {
+          const upvoter = await User.findById(req.user._id);
+          if (upvoter) {
+            const currentPoints = upvoter.points || 0;
+            upvoter.points = currentPoints + 1;
+            await upvoter.save();
+            console.log(`✅ Awarded +1 point to user ${upvoter._id} for upvoting issue ${issue._id}. Points: ${currentPoints} → ${upvoter.points}`);
+          }
+        } catch (pointsError) {
+          console.error('❌ Error awarding points for upvote:', pointsError);
+          // Don't fail upvote if points fail
+        }
+      }
+      
       res.json({ success: true, upvotes: issue.upvotes });
     } catch (error) {
-      res.status(500).json({ success: false });
+      console.error('Error upvoting issue:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 

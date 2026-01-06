@@ -484,6 +484,15 @@ class ApiService {
     return this.handleResponse(response);
   }
 
+  // ================= LEADERBOARD =================
+  async getLeaderboard(limit = 100) {
+    const queryString = new URLSearchParams({ limit }).toString();
+    const response = await fetch(`${this.baseURL}/issues/leaderboard${queryString ? `?${queryString}` : ''}`, {
+      headers: this.getAuthHeaders()
+    });
+    return this.handleResponse(response);
+  }
+
   // ================= NOTIFICATIONS =================
   async getNotifications() {
     const response = await fetch(`${this.baseURL}/notifications`, {
