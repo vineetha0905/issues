@@ -1,11 +1,10 @@
 fastapi
 uvicorn[standard]
 pydantic
+python-multipart
 transformers
 torch
 pillow
 requests
 imagehash
 profanity-check
-
-python-multipart
