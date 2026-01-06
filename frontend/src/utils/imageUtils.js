@@ -30,9 +30,33 @@ export const getIssueImageUrl = (issue) => {
     
     // CRITICAL: Check images array FIRST (primary source based on Issue model)
     // This is the most common case - images are stored in an array
-    if (issue.images) {
-      if (Array.isArray(issue.images) && issue.images.length > 0) {
-        const first = issue.images[0];
+    if (issue.images !== undefined && issue.images !== null) {
+      // Handle case where images might be an object instead of array
+      let imagesArray = issue.images;
+      
+      // If images is an object (not array), try to extract array from common properties
+      if (!Array.isArray(issue.images) && typeof issue.images === 'object') {
+        // Check if it's a single image object
+        if (issue.images.url || issue.images.secure_url || issue.images.imageUrl) {
+          imagesArray = [issue.images]; // Wrap single object in array
+          console.log('[imageUtils] ⚠ issue.images is object (not array), wrapping it:', issue.images);
+        } else if (issue.images.images && Array.isArray(issue.images.images)) {
+          // Check if there's an 'images' property inside the object
+          imagesArray = issue.images.images;
+          console.log('[imageUtils] ⚠ issue.images is object with nested images array');
+        } else {
+          // Unknown object structure
+          console.warn('[imageUtils] ✗ issue.images is object but no valid structure found:', {
+            keys: Object.keys(issue.images),
+            value: issue.images
+          });
+          imagesArray = [];
+        }
+      }
+      
+      // Now process as array
+      if (Array.isArray(imagesArray) && imagesArray.length > 0) {
+        const first = imagesArray[0];
         
         // If first item is a string (URL), use it directly
         if (typeof first === 'string' && isValidUrlString(first)) {
@@ -63,12 +87,17 @@ export const getIssueImageUrl = (issue) => {
             });
           }
         }
+      } else if (Array.isArray(imagesArray) && imagesArray.length === 0) {
+        console.warn('[imageUtils] ✗ issue.images is an empty array');
       } else {
-        console.warn('[imageUtils] ✗ issue.images exists but is empty or not an array:', {
+        console.warn('[imageUtils] ✗ issue.images exists but is not a valid array:', {
           isArray: Array.isArray(issue.images),
-          length: Array.isArray(issue.images) ? issue.images.length : 'N/A',
+          isObject: typeof issue.images === 'object' && issue.images !== null,
           type: typeof issue.images,
-          value: issue.images
+          constructor: issue.images?.constructor?.name,
+          length: Array.isArray(issue.images) ? issue.images.length : 'N/A',
+          value: issue.images,
+          stringified: JSON.stringify(issue.images)?.substring(0, 200)
         });
       }
     }
@@ -93,17 +122,21 @@ export const getIssueImageUrl = (issue) => {
     
     // Debug: log what we found
     console.warn('[imageUtils] ✗ No valid image found. Issue structure:', {
+      issueId: issue._id || issue.id,
       hasImage: !!issue.image,
       imageValue: issue.image,
       hasImageUrl: !!issue.imageUrl,
       imageUrlValue: issue.imageUrl,
       hasPhoto: !!issue.photo,
       hasImagePath: !!issue.imagePath,
-      hasImagesArray: !!issue.images,
+      hasImages: issue.images !== undefined && issue.images !== null,
+      imagesValue: issue.images,
       imagesType: typeof issue.images,
       imagesIsArray: Array.isArray(issue.images),
+      imagesConstructor: issue.images?.constructor?.name,
       imagesArrayLength: Array.isArray(issue.images) ? issue.images.length : 'N/A',
       imagesArrayFirst: Array.isArray(issue.images) && issue.images.length > 0 ? issue.images[0] : null,
+      imagesStringified: issue.images ? JSON.stringify(issue.images).substring(0, 200) : 'null/undefined',
       allKeys: Object.keys(issue).slice(0, 20) // First 20 keys for debugging
     });
     

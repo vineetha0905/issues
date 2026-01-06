@@ -25,7 +25,30 @@ class IssueController {
       }
       
       // Normalize images array - ensure URLs are fully qualified
-      if (issue.images && Array.isArray(issue.images) && issue.images.length > 0) {
+      // First, ensure issue.images is always an array (handle edge cases)
+      if (!Array.isArray(issue.images)) {
+        // If images is an object, try to convert it to array
+        if (issue.images && typeof issue.images === 'object') {
+          if (issue.images.url || issue.images.secure_url || issue.images.imageUrl) {
+            // Single image object - wrap in array
+            issue.images = [issue.images];
+            if (index === 0) {
+              console.log('[Backend] Converted single image object to array:', issue.images);
+            }
+          } else {
+            // Unknown object structure - set to empty array
+            if (index === 0) {
+              console.warn('[Backend] issue.images is object but no valid image structure found:', Object.keys(issue.images));
+            }
+            issue.images = [];
+          }
+        } else {
+          // null, undefined, or other - set to empty array
+          issue.images = [];
+        }
+      }
+      
+      if (Array.isArray(issue.images) && issue.images.length > 0) {
         const normalizedImages = issue.images.map((img, imgIndex) => {
           // If image is already a string URL, keep it as-is or convert to object
           if (typeof img === 'string') {
