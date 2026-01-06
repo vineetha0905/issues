@@ -127,90 +127,63 @@ def classify_report(report: dict):
             print(f"[ERROR] Text duplicate check failed: {str(e)}")
             # Continue - don't block on technical errors
 
-        # STEP 1: Check image validation FIRST (before location duplicate check)
-        # This ensures the correct error message is shown when images don't match
-        image_bytes = report.get("image_bytes")
+        # Check for location-based duplicate (same category within 10 meters)
+        latitude = report.get("latitude")
+        longitude = report.get("longitude")
+        if latitude is not None and longitude is not None:
+            try:
+                if storage.is_duplicate_location(latitude, longitude, description, category, threshold=10.0, store=False):
+                    return reject(report, "A similar issue has already been reported at this location.", category, confidence)
+            except Exception as e:
+                print(f"[ERROR] Location duplicate check failed: {str(e)}")
+                # Continue - don't block on technical errors
+
+        # STEP 1: Check image against detected category FIRST (BEFORE duplicate check)
+        image_bytes = report.get("image_bytes")  # Changed from image_url to image_bytes
         if image_bytes:
             print(f"[DEBUG] Processing image for category '{category}' (image size: {len(image_bytes)} bytes)")
             
             try:
-                # STEP 1a: Check for duplicate images
+                # CRITICAL: Validate image matches category FIRST
+                # If image doesn't match, reject immediately - don't check duplicates
+                image_matches = image_matches_category_from_bytes(image_bytes, category)
+                
+                if not image_matches:
+                    # Image doesn't match category - reject immediately
+                    print(f"[DEBUG] Image does NOT match category '{category}' - rejecting without duplicate check")
+                    return reject(
+                        report,
+                        "Image does not match the issue description. Please provide an image related to the reported category.",
+                        category,
+                        confidence
+                    )
+                
+                print(f"[DEBUG] Image matches category '{category}' - proceeding to duplicate check")
+                
+                # STEP 2: Only check for duplicates if image matches category
                 try:
+                    # Check for duplicates with threshold=0 (EXACT match only - most strict)
                     print(f"[DEBUG] Checking for duplicate image")
                     is_dup = storage.is_duplicate_image_from_bytes(image_bytes, threshold=0, store=False)
                     
                     if is_dup:
-                        print(f"[DEBUG] DUPLICATE IMAGE DETECTED")
+                        print(f"[DEBUG] DUPLICATE DETECTED")
                         return reject(report, "Duplicate image detected. This image has already been used in another report.", category, confidence)
                     
-                    print(f"[DEBUG] Image is NOT duplicate - proceeding to category validation")
+                    print(f"[DEBUG] Image is NOT duplicate - will be stored in dataset after acceptance")
+                    # Image hash will be stored in dataset when report is saved
                 except Exception as e:
                     # If duplicate check fails, allow submission (don't block on technical errors)
                     print(f"[ERROR] Duplicate check failed (allowing submission): {str(e)}")
                     import traceback
                     print(traceback.format_exc())
                     # Continue - don't block legitimate reports due to technical issues
-                
-                # STEP 1b: Check if image matches the category/description
-                try:
-                    image_matches = image_matches_category_from_bytes(image_bytes, category)
-                    
-                    if not image_matches:
-                        # Image doesn't match the category - reject with correct error message
-                        print(f"[DEBUG] Image does NOT match category '{category}' - rejecting")
-                        return reject(
-                            report,
-                            "Image does not match the issue description. Please provide an image related to the reported category.",
-                            category,
-                            confidence
-                        )
-                    
-                    print(f"[DEBUG] Image matches category '{category}' - validation passed")
-                except Exception as e:
-                    # If category validation fails due to technical error, allow submission (don't block)
-                    print(f"[WARNING] Image category validation failed (allowing submission): {str(e)}")
-                    import traceback
-                    print(traceback.format_exc())
-                    # Continue - don't block legitimate reports due to technical issues
-                
-                print(f"[DEBUG] Image validation complete - will be stored in dataset after acceptance")
-                # Image hash will be stored in dataset when report is saved
             except Exception as e:
-                print(f"[ERROR] Image processing error (allowing submission): {str(e)}")
+                print(f"[ERROR] Image validation failed: {str(e)}")
                 import traceback
                 print(traceback.format_exc())
-                # If image processing fails, allow submission (don't block on technical errors)
-                # Continue - don't block legitimate reports due to technical issues
-
-        # STEP 2: Check for comprehensive duplicate (requires BOTH image similarity AND text similarity)
-        # Location is used only as a supporting signal to filter candidates, not as a primary condition
-        latitude = report.get("latitude")
-        longitude = report.get("longitude")
-        image_bytes = report.get("image_bytes")
-        
-        if image_bytes:
-            try:
-                # Use comprehensive duplicate detection that requires BOTH image AND text similarity
-                # Location is used to filter candidates (within 50m) but location match alone is NOT sufficient
-                is_dup = storage.is_comprehensive_duplicate(
-                    image_bytes=image_bytes,
-                    description=description,
-                    category=category,
-                    lat=latitude,
-                    lon=longitude,
-                    image_threshold=0,  # Exact image hash match only
-                    text_similarity_threshold=0.6,  # 60% text similarity required
-                    location_threshold=50.0  # Check reports within 50m (supporting signal only)
-                )
-                
-                if is_dup:
-                    print(f"[DEBUG] COMPREHENSIVE DUPLICATE DETECTED: image AND description match")
-                    return reject(report, "A similar issue with the same image and description has already been reported.", category, confidence)
-            except Exception as e:
-                print(f"[ERROR] Comprehensive duplicate check failed: {str(e)}")
-                import traceback
-                print(traceback.format_exc())
-                # Continue - don't block on technical errors
+                # If image validation fails, reject the report
+                return reject(report, f"Image validation error: {str(e)}", category, confidence)
 
         urgency = detect_urgency(description)
         
@@ -304,26 +277,21 @@ def image_matches_category_from_bytes(image_bytes: bytes, category: str) -> bool
             print(f"[DEBUG] Image classified as generic '{image_label}' - allowing through (uncertain)")
             return True  # Allow through - generic labels are too vague to reject
 
-        # If no allowed labels for this category, allow through (can't validate)
-        if not allowed_labels and not category_keywords:
-            print(f"[DEBUG] No validation rules for category '{category}' - allowing through")
-            return True  # Allow through if we can't validate
-
         # Method 1: Direct exact match with allowed labels
         if image_label in allowed_labels:
-            print(f"[DEBUG] Image label '{image_label}' exactly matches category '{category}' - accepting")
+            print(f"Image label '{image_label}' exactly matches category '{category}' - accepting")
             return True
 
         # Method 2: Check if image label contains any allowed label (substring match)
         for lbl in allowed_labels:
             if lbl in image_label or image_label in lbl:
-                print(f"[DEBUG] Image label '{image_label}' contains allowed label '{lbl}' for category '{category}' - accepting")
+                print(f"Image label '{image_label}' contains allowed label '{lbl}' for category '{category}' - accepting")
                 return True
 
         # Method 3: Check if image label contains any category keyword from description
         for kw in category_keywords:
             if kw in image_label or image_label in kw:
-                print(f"[DEBUG] Image label '{image_label}' matches keyword '{kw}' for category '{category}' - accepting")
+                print(f"Image label '{image_label}' matches keyword '{kw}' for category '{category}' - accepting")
                 return True
 
         # Method 4: Word-level matching (split and check for common words)
@@ -332,7 +300,7 @@ def image_matches_category_from_bytes(image_bytes: bytes, category: str) -> bool
             lbl_words = set(lbl.split())
             common_words = image_words.intersection(lbl_words)
             if common_words and len(common_words) > 0:
-                print(f"[DEBUG] Image label '{image_label}' shares words with '{lbl}' for category '{category}' - accepting")
+                print(f"Image label '{image_label}' shares words with '{lbl}' for category '{category}' - accepting")
                 return True
 
         # Method 5: Check if any word from image appears in category keywords
@@ -340,12 +308,17 @@ def image_matches_category_from_bytes(image_bytes: bytes, category: str) -> bool
             if len(word) > 2:  # Only check meaningful words (length > 2)
                 for kw in category_keywords:
                     if word in kw or kw in word:
-                        print(f"[DEBUG] Image word '{word}' matches keyword '{kw}' for category '{category}' - accepting")
+                        print(f"Image word '{word}' matches keyword '{kw}' for category '{category}' - accepting")
                         return True
                 for lbl in allowed_labels:
                     if word in lbl or lbl in word:
-                        print(f"[DEBUG] Image word '{word}' matches label '{lbl}' for category '{category}' - accepting")
+                        print(f"Image word '{word}' matches label '{lbl}' for category '{category}' - accepting")
                         return True
+
+        # If no validation rules for this category, allow through (can't validate)
+        if not allowed_labels and not category_keywords:
+            print(f"[DEBUG] No validation rules for category '{category}' - allowing through")
+            return True  # Allow through if we can't validate
 
         # If none of the methods match and we have validation rules, reject
         # Only reject if we have clear validation rules and can confidently say it doesn't match
