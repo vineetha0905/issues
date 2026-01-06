@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
@@ -6,6 +6,7 @@ import traceback
 import os
 import sys
 import json
+import base64
 
 # Initialize app first - this must work
 app = FastAPI(title="Civic ML Backend API", version="1.0.0")
@@ -16,11 +17,17 @@ ml_available = False
 
 try:
     from app.pipeline import classify_report
+    from app.models import ReportRequest
     ml_available = True
     print("✅ ML modules loaded successfully")
 except Exception as e:
     print(f"⚠️ ML modules not available (non-critical): {e}")
     print("⚠️ API will return default responses")
+    # Import ReportRequest even if ML is not available for endpoint to work
+    try:
+        from app.models import ReportRequest
+    except Exception:
+        pass
 
 # Log startup information
 print("=" * 50)
@@ -62,96 +69,43 @@ async def submit_options():
     return {"status": "ok"}
 
 @app.post("/submit")
-async def submit_report(
-    report_id: str = Form(..., description="Unique identifier for the report"),
-    description: str = Form(..., description="Description of the issue"),
-    user_id: Optional[str] = Form(None, description="Optional user identifier"),
-    latitude: Optional[str] = Form(None, description="Optional latitude as string (e.g., '37.7749')"),
-    longitude: Optional[str] = Form(None, description="Optional longitude as string (e.g., '-122.4194')"),
-    image: Optional[UploadFile] = File(None, description="Optional image file (JPEG, PNG, etc.)")
-):
+async def submit_report(request: ReportRequest):
     """
     Submit a report for ML validation and classification.
     
-    Accepts multipart/form-data with the following fields:
+    Accepts JSON (application/json) with the following fields:
     - report_id (required, string): Unique identifier for the report
     - description (required, string): Description of the issue
     - user_id (optional, string): User identifier
-    - latitude (optional, string): Latitude coordinate (-90 to 90), will be converted to float
-    - longitude (optional, string): Longitude coordinate (-180 to 180), will be converted to float
-    - image (optional, file): Image file (JPEG, PNG, etc.)
+    - latitude (optional, float): Latitude coordinate (-90 to 90)
+    - longitude (optional, float): Longitude coordinate (-180 to 180)
+    - image_base64 (optional, string): Image file as base64-encoded string (data URI or plain base64)
     
     Returns a JSON response with classification results.
     """
     try:
-        print(f"Received ML validation request: report_id={report_id}, description_length={len(description or '')}")
         
-        # Validate required fields with clear error messages
-        if not report_id or not report_id.strip():
-            raise HTTPException(
-                status_code=422,
-                detail="Validation error: 'report_id' is required and cannot be empty"
-            )
-        if not description or not description.strip():
-            raise HTTPException(
-                status_code=422,
-                detail="Validation error: 'description' is required and cannot be empty"
-            )
+        print(f"Received ML validation request: report_id={request.report_id}, description_length={len(request.description or '')}")
         
         # Clean up string fields
-        report_id = report_id.strip()
-        description = description.strip()
-        user_id = user_id.strip() if user_id else None
+        report_id = request.report_id.strip()
+        description = request.description.strip()
+        user_id = request.user_id.strip() if request.user_id else None
         
-        # Validate and convert latitude
-        latitude_float = None
-        if latitude:
-            try:
-                latitude_float = float(latitude.strip())
-                if not (-90 <= latitude_float <= 90):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Validation error: 'latitude' must be between -90 and 90, got {latitude_float}"
-                    )
-            except HTTPException:
-                raise  # Re-raise HTTPException as-is
-            except (ValueError, TypeError) as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Validation error: 'latitude' must be a valid number, got '{latitude}'"
-                )
-        
-        # Validate and convert longitude
-        longitude_float = None
-        if longitude:
-            try:
-                longitude_float = float(longitude.strip())
-                if not (-180 <= longitude_float <= 180):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Validation error: 'longitude' must be between -180 and 180, got {longitude_float}"
-                    )
-            except HTTPException:
-                raise  # Re-raise HTTPException as-is
-            except (ValueError, TypeError) as e:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Validation error: 'longitude' must be a valid number, got '{longitude}'"
-                )
-        
-        # Read and validate image file if provided
+        # Process base64 image if provided
         image_bytes = None
         MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
-        if image:
+        if request.image_base64:
             try:
-                # Check content type if available (informational only, not strict)
-                if image.content_type:
-                    allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
-                    if image.content_type not in allowed_types:
-                        print(f"Warning: Unexpected content type '{image.content_type}', continuing anyway")
+                # Remove data URI prefix if present (e.g., "data:image/jpeg;base64,")
+                image_data = request.image_base64.strip()
+                if ',' in image_data:
+                    image_data = image_data.split(',', 1)[1]
                 
-                # Read image with size limit
-                image_bytes = await image.read()
+                # Decode base64 to bytes
+                image_bytes = base64.b64decode(image_data, validate=True)
+                
+                # Validate image size
                 if len(image_bytes) > MAX_IMAGE_SIZE:
                     raise HTTPException(
                         status_code=422,
@@ -160,15 +114,15 @@ async def submit_report(
                 if len(image_bytes) == 0:
                     raise HTTPException(
                         status_code=422,
-                        detail="Validation error: Image file is empty"
+                        detail="Validation error: Image data is empty"
                     )
-                print(f"Received image: {len(image_bytes)} bytes, content_type: {image.content_type}")
+                print(f"Received image: {len(image_bytes)} bytes (decoded from base64)")
             except HTTPException:
                 raise
             except Exception as e:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Validation error: Failed to read image file: {str(e)}"
+                    detail=f"Validation error: Failed to decode base64 image: {str(e)}"
                 )
         
         # Prepare report data
@@ -176,9 +130,9 @@ async def submit_report(
             "report_id": report_id,
             "description": description,
             "user_id": user_id,
-            "image_bytes": image_bytes,  # Changed from image_url to image_bytes
-            "latitude": latitude_float,
-            "longitude": longitude_float
+            "image_bytes": image_bytes,
+            "latitude": request.latitude,
+            "longitude": request.longitude
         }
         
         # Classify the report using ML
