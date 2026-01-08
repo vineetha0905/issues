@@ -38,17 +38,38 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (aadhaarNumber.length !== 12) {
+    
+    // Trim and validate inputs
+    const trimmedName = name.trim();
+    const trimmedAadhaar = aadhaarNumber.replace(/\D/g, '').trim();
+    const trimmedMobile = mobile.replace(/\D/g, '').trim();
+    const trimmedAddress = address ? address.trim() : '';
+    
+    if (!trimmedName || trimmedName.length < 2) {
+      toast.warning('Please enter a valid name (at least 2 characters)');
+      return;
+    }
+    if (trimmedAadhaar.length !== 12) {
       toast.warning('Please enter a valid 12-digit Aadhaar number');
       return;
     }
-    if (mobile.length !== 10) {
+    if (trimmedMobile.length !== 10) {
       toast.warning('Please enter a valid 10-digit mobile number');
       return;
     }
+    if (trimmedAddress && trimmedAddress.length > 300) {
+      toast.warning('Address cannot exceed 300 characters');
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
-      const result = await apiService.registerUser({ name, aadhaarNumber, mobile, address });
+      const result = await apiService.registerUser({ 
+        name: trimmedName, 
+        aadhaarNumber: trimmedAadhaar, 
+        mobile: trimmedMobile, 
+        address: trimmedAddress || undefined 
+      });
       toast.success('Registered successfully');
       // Optionally store token/user if returned
       if (result.data && result.data.token && result.data.user) {
@@ -63,7 +84,12 @@ const Register = () => {
       }
       navigate('/login');
     } catch (error) {
-      toast.error(`Registration failed: ${error.message}`);
+      // Extract detailed error message from validation errors if available
+      let errorMessage = error.message;
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors.map(err => err.msg || err.message).join(', ');
+      }
+      toast.error(`Registration failed: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }

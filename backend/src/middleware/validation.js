@@ -25,27 +25,37 @@ const validateUserRegistration = [
     .withMessage('Name must be between 2 and 50 characters'),
   
   body('aadhaarNumber')
+    .notEmpty()
+    .withMessage('Aadhaar number is required')
+    .trim()
     .matches(/^[0-9]{12}$/)
     .withMessage('Please provide a valid 12-digit Aadhaar number'),
   
   body('email')
     .optional()
+    .trim()
     .isEmail()
     .withMessage('Please provide a valid email')
     .normalizeEmail(),
   
   body('mobile')
+    .notEmpty()
+    .withMessage('Mobile number is required')
+    .trim()
     .matches(/^[0-9]{10}$/)
     .withMessage('Please provide a valid 10-digit mobile number'),
   
   body('password')
     .optional()
+    .trim()
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
   
   body('address')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
     .isString()
+    .withMessage('Address must be a string')
     .isLength({ max: 300 })
     .withMessage('Address cannot exceed 300 characters'),
   
@@ -75,18 +85,55 @@ const validateUserLogin = [
 const validateOTPRequest = [
   body('aadhaarNumber')
     .optional()
-    .matches(/^[0-9]{12}$/)
+    .custom((value) => {
+      if (value === undefined || value === null || value === '') {
+        return true; // Skip validation if not provided
+      }
+      const cleaned = String(value).trim().replace(/\D/g, '');
+      return cleaned.length === 12 && /^[0-9]{12}$/.test(cleaned);
+    })
     .withMessage('Please provide a valid 12-digit Aadhaar number'),
   
   body('mobile')
     .optional()
-    .isMobilePhone('en-IN')
-    .withMessage('Please provide a valid Indian mobile number'),
+    .custom((value) => {
+      if (value === undefined || value === null || value === '') {
+        return true; // Skip validation if not provided
+      }
+      const cleaned = String(value).trim().replace(/\D/g, '');
+      return cleaned.length === 10 && /^[0-9]{10}$/.test(cleaned);
+    })
+    .withMessage('Please provide a valid 10-digit mobile number'),
+  
+  body('email')
+    .optional()
+    .custom((value) => {
+      if (value === undefined || value === null || value === '') {
+        return true; // Skip validation if not provided
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(String(value).trim());
+    })
+    .withMessage('Please provide a valid email'),
   
   body().custom((body) => {
-    if (!body.aadhaarNumber && !body.mobile) {
-      throw new Error('Aadhaar number or mobile number is required');
+    const aadhaar = body.aadhaarNumber ? String(body.aadhaarNumber).trim().replace(/\D/g, '') : '';
+    const mobile = body.mobile ? String(body.mobile).trim().replace(/\D/g, '') : '';
+    const email = body.email ? String(body.email).trim() : '';
+    
+    const hasAadhaar = aadhaar.length === 12;
+    const hasMobile = mobile.length === 10;
+    const hasEmail = email.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    
+    if (!hasAadhaar && !hasMobile && !hasEmail) {
+      throw new Error('Aadhaar number, mobile number, or email is required');
     }
+    
+    // Update req.body with cleaned values
+    if (hasAadhaar) body.aadhaarNumber = aadhaar;
+    if (hasMobile) body.mobile = mobile;
+    if (hasEmail) body.email = email;
+    
     return true;
   }),
   

@@ -49,47 +49,47 @@ class AuthController {
     try {
       const { name, aadhaarNumber, mobile, email, password, address } = req.body;
 
-      // Check if user already exists
-      const existingUser = await User.findOne({
-        $or: [
-          ...(aadhaarNumber ? [{ aadhaarNumber }] : []),
-          ...(email ? [{ email }] : []),
-          ...(mobile ? [{ mobile }] : [])
-        ]
-      });
+      // Check if user already exists by mobile (primary identifier)
+      let existingUser = null;
+      if (mobile) {
+        existingUser = await User.findOne({ mobile });
+      }
 
-      // Prevent Aadhaar conflicts with other accounts
+      // Check for Aadhaar conflicts - only fail if Aadhaar belongs to a different user
       if (aadhaarNumber) {
-        const aadhaarConflict = await User.findOne({
-          aadhaarNumber,
-          ...(existingUser ? { _id: { $ne: existingUser._id } } : {})
-        });
-        if (aadhaarConflict) {
-          return res.status(400).json({
-            success: false,
-            message: 'Aadhaar number is already linked to another account'
-          });
+        const aadhaarUser = await User.findOne({ aadhaarNumber });
+        if (aadhaarUser) {
+          // Found a user with this Aadhaar number
+          if (existingUser) {
+            // We also have an existing user by mobile
+            if (aadhaarUser._id.toString() !== existingUser._id.toString()) {
+              // Different users - this is a conflict!
+              // The Aadhaar belongs to user A, but mobile belongs to user B
+              return res.status(400).json({
+                success: false,
+                message: 'Aadhaar number is already linked to another account'
+              });
+            }
+            // Same user - allow updating (no conflict)
+          } else {
+            // No existing user by mobile, but found user by Aadhaar
+            // Check if the mobile numbers match (same person)
+            if (aadhaarUser.mobile && aadhaarUser.mobile !== mobile) {
+              // Different mobile number - this Aadhaar belongs to someone else
+              return res.status(400).json({
+                success: false,
+                message: 'Aadhaar number is already linked to another account'
+              });
+            }
+            // Same mobile or no mobile on the Aadhaar account - use this user
+            existingUser = aadhaarUser;
+          }
         }
       }
 
-      // If user exists with mobile but is not verified, allow registration to proceed
-      // This handles the case where a user was created but OTP verification wasn't completed
-      if (existingUser && mobile && existingUser.mobile === mobile && !existingUser.isVerified) {
-        // Allow registration to proceed - will update the existing user below
-        console.log('Found existing unverified user with mobile, allowing registration to proceed');
-      } else if (existingUser) {
-        // Allow upgrading an existing lightweight account (e.g., created via OTP mobile flow)
-        // If Aadhaar is already linked to another user, prevent conflict
-        if (
-          aadhaarNumber &&
-          existingUser.aadhaarNumber &&
-          existingUser.aadhaarNumber !== aadhaarNumber
-        ) {
-          return res.status(400).json({
-            success: false,
-            message: 'Aadhaar number is already linked to another account'
-          });
-        }
+      // If user exists (by mobile or Aadhaar), allow updating their information
+      if (existingUser) {
+        console.log('Found existing user, allowing registration/update to proceed');
 
         existingUser.name = name || existingUser.name;
         if (aadhaarNumber) existingUser.aadhaarNumber = aadhaarNumber;

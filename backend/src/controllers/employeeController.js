@@ -289,7 +289,27 @@ class EmployeeController {
   async resolveIssue(req, res) {
     try {
       const { id } = req.params;
-      const { latitude, longitude } = req.body;
+      // Handle both JSON and FormData requests
+      // FormData sends everything as strings, so we need to parse
+      let latitude = req.body.latitude;
+      let longitude = req.body.longitude;
+      
+      // Handle string values from FormData
+      if (latitude !== undefined && latitude !== null && latitude !== '') {
+        latitude = typeof latitude === 'string' ? latitude.trim() : latitude;
+        if (latitude === '') latitude = null;
+      } else {
+        latitude = null;
+      }
+      
+      if (longitude !== undefined && longitude !== null && longitude !== '') {
+        longitude = typeof longitude === 'string' ? longitude.trim() : longitude;
+        if (longitude === '') longitude = null;
+      } else {
+        longitude = null;
+      }
+      
+      console.log('Resolve issue request:', { id, latitude, longitude, hasFile: !!req.file });
 
       const issue = await Issue.findById(id);
       if (!issue) {
@@ -332,35 +352,92 @@ class EmployeeController {
         };
       }
 
-      // Validate GPS coordinates are within 10 meters of original issue location
-      if (latitude && longitude) {
+      // Validate GPS coordinates are within reasonable distance of original issue location
+      // Using 500 meters as threshold to account for GPS accuracy, signal variations, and practical field work
+      // GPS can vary significantly due to device differences, signal interference, urban canyons, and building obstructions
+      // Admin users can bypass this validation for manual resolution
+      const MAX_DISTANCE_METERS = 500;
+      
+      // Check if coordinates are provided (not null, undefined, or empty string)
+      const hasCoordinates = latitude !== null && latitude !== undefined && latitude !== '' &&
+                             longitude !== null && longitude !== undefined && longitude !== '';
+      
+      if (hasCoordinates) {
+        // Get original issue coordinates - ensure correct field access
         const originalLat = issue.location?.coordinates?.latitude;
         const originalLng = issue.location?.coordinates?.longitude;
         
-        if (originalLat && originalLng) {
-          // Calculate distance using Haversine formula (approximate)
-          const R = 6371000; // Earth's radius in meters
-          const dLat = (parseFloat(latitude) - originalLat) * Math.PI / 180;
-          const dLng = (parseFloat(longitude) - originalLng) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(originalLat * Math.PI / 180) * Math.cos(parseFloat(latitude) * Math.PI / 180) *
-                    Math.sin(dLng/2) * Math.sin(dLng/2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-          const distance = R * c; // Distance in meters
+        // Validate original coordinates exist
+        if (originalLat === undefined || originalLat === null || 
+            originalLng === undefined || originalLng === null) {
+          console.warn(`Issue ${id} missing original coordinates. Original location:`, issue.location);
+        } else {
+          // Parse and validate resolved coordinates
+          const resolvedLat = parseFloat(latitude);
+          const resolvedLng = parseFloat(longitude);
           
-          if (distance > 10) {
+          // Validate coordinate ranges
+          if (isNaN(resolvedLat) || isNaN(resolvedLng)) {
             return res.status(400).json({ 
               success: false, 
-              message: `Resolved location must be within 10 meters of reported location. Current distance: ${Math.round(distance)}m` 
+              message: 'Invalid latitude or longitude values. Please provide valid numeric coordinates.' 
             });
+          }
+          
+          if (resolvedLat < -90 || resolvedLat > 90) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Invalid latitude. Must be between -90 and 90.' 
+            });
+          }
+          
+          if (resolvedLng < -180 || resolvedLng > 180) {
+            return res.status(400).json({ 
+              success: false, 
+              message: 'Invalid longitude. Must be between -180 and 180.' 
+            });
+          }
+          
+          // Validate original coordinates are also in valid range
+          if (originalLat < -90 || originalLat > 90 || originalLng < -180 || originalLng > 180) {
+            console.error(`Issue ${id} has invalid original coordinates: (${originalLat}, ${originalLng})`);
+            // Don't block resolution if original coordinates are invalid - just log it
+          } else {
+            // Calculate distance using Haversine formula (accurate for great-circle distance)
+            const R = 6371000; // Earth's radius in meters
+            const dLat = (resolvedLat - originalLat) * Math.PI / 180;
+            const dLng = (resolvedLng - originalLng) * Math.PI / 180;
+            
+            // Haversine formula components
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(originalLat * Math.PI / 180) * Math.cos(resolvedLat * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const distance = R * c; // Distance in meters
+            
+            console.log(`Distance validation: Issue ${id} - Original (${originalLat}, ${originalLng}) vs Resolved (${resolvedLat}, ${resolvedLng}) = ${distance.toFixed(2)}m | User: ${user.role} (${isAdmin ? 'ADMIN - BYPASS' : 'EMPLOYEE'})`);
+            
+            // Admin users can bypass distance validation for manual resolution
+            if (!isAdmin && distance > MAX_DISTANCE_METERS) {
+              return res.status(400).json({ 
+                success: false, 
+                message: `Resolved location must be within ${MAX_DISTANCE_METERS} meters of reported location. Current distance: ${Math.round(distance)}m. Please verify you are at the correct location.` 
+              });
+            } else if (isAdmin && distance > MAX_DISTANCE_METERS) {
+              console.log(`⚠️ Admin bypass: Distance ${distance.toFixed(2)}m exceeds ${MAX_DISTANCE_METERS}m threshold, but allowing resolution due to admin override.`);
+            }
           }
         }
         
+        // Store resolved location coordinates (always store if provided)
         issue.resolved = issue.resolved || {};
         issue.resolved.location = {
           latitude: parseFloat(latitude),
           longitude: parseFloat(longitude)
         };
+      } else {
+        // If coordinates not provided, still allow resolution (photo-based resolution)
+        console.log(`Resolution without coordinates for issue ${id} by ${user.role}`);
       }
 
       const oldStatus = issue.status;

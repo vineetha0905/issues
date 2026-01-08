@@ -169,7 +169,7 @@ const ResolveIssue = () => {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Resolved Location (Required - within 10m of original)</label>
+            <label className="form-label">Resolved Location (Required - within 500m of original)</label>
             <div className="flex gap-2 items-end flex-wrap">
               <div className="flex-1 min-w-[120px]">
                 <input

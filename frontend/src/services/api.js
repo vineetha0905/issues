@@ -23,6 +23,12 @@ class ApiService {
   async handleResponse(response) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Network error' }));
+      // Include validation errors if available
+      if (error.errors && Array.isArray(error.errors)) {
+        const validationError = new Error(error.message || 'Validation failed');
+        validationError.errors = error.errors;
+        throw validationError;
+      }
       // Include reason in error message if available
       const errorMessage = error.reason 
         ? `${error.message || 'Error'}: ${error.reason}`
@@ -170,28 +176,43 @@ class ApiService {
 
   // ================= AUTH =================
   async sendOtpByAadhaar(aadhaarNumber) {
+    // Clean and validate aadhaar number
+    const cleaned = aadhaarNumber ? aadhaarNumber.replace(/\D/g, '').trim() : '';
+    if (!cleaned || cleaned.length !== 12) {
+      throw new Error('Please provide a valid 12-digit Aadhaar number');
+    }
     const response = await fetch(`${this.baseURL}/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ aadhaarNumber })
+      body: JSON.stringify({ aadhaarNumber: cleaned })
     });
     return this.handleResponse(response);
   }
 
   async sendOtpByMobile(mobile) {
+    // Clean and validate mobile number
+    const cleaned = mobile ? mobile.replace(/\D/g, '').trim() : '';
+    if (!cleaned || cleaned.length !== 10) {
+      throw new Error('Please provide a valid 10-digit mobile number');
+    }
     const response = await fetch(`${this.baseURL}/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mobile })
+      body: JSON.stringify({ mobile: cleaned })
     });
     return this.handleResponse(response);
   }
 
   async sendOtpByEmail(email) {
+    // Clean and validate email
+    const cleaned = email ? email.trim() : '';
+    if (!cleaned) {
+      throw new Error('Please provide a valid email address');
+    }
     const response = await fetch(`${this.baseURL}/auth/send-otp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email: cleaned })
     });
     return this.handleResponse(response);
   }
@@ -243,6 +264,10 @@ class ApiService {
       body: JSON.stringify(userData)
     });
     return this.handleResponse(response);
+  }
+
+  async registerUser(userData) {
+    return this.register(userData);
   }
 
   async guestLogin() {
@@ -460,14 +485,16 @@ class ApiService {
 
   async resolveIssue(issueId, resolvedData) {
     const formData = new FormData();
-    if (resolvedData.latitude !== undefined) {
+    if (resolvedData.latitude !== undefined && resolvedData.latitude !== null && resolvedData.latitude !== '') {
       formData.append('latitude', resolvedData.latitude.toString());
     }
-    if (resolvedData.longitude !== undefined) {
+    if (resolvedData.longitude !== undefined && resolvedData.longitude !== null && resolvedData.longitude !== '') {
       formData.append('longitude', resolvedData.longitude.toString());
     }
-    if (resolvedData.photo) {
-      formData.append('photo', resolvedData.photo);
+    // Support both imageFile and photo field names
+    const imageFile = resolvedData.imageFile || resolvedData.photo;
+    if (imageFile) {
+      formData.append('image', imageFile);
     }
 
     const headers = {};

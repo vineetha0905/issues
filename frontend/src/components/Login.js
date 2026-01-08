@@ -16,14 +16,18 @@ const Login = ({ setUser, setIsAdmin }) => {
 
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (mobile.length !== 10) {
+    
+    // Clean mobile number
+    const cleanedMobile = mobile.replace(/\D/g, '').trim();
+    
+    if (!cleanedMobile || cleanedMobile.length !== 10) {
       toast.warning('Please enter a valid 10-digit mobile number');
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await apiService.sendOtpByMobile(mobile);
+      const response = await apiService.sendOtpByMobile(cleanedMobile);
       setIsOtpSent(true);
       setResendCooldown(10); // Start 60-second cooldown
       
@@ -34,12 +38,18 @@ const Login = ({ setUser, setIsAdmin }) => {
         toast.success('OTP sent to your phone');
       }
     } catch (error) {
-      if (error.message.includes('Please register before proceeding')) {
+      // Extract detailed error message from validation errors if available
+      let errorMessage = error.message;
+      if (error.errors && Array.isArray(error.errors) && error.errors.length > 0) {
+        errorMessage = error.errors.map(err => err.msg || err.message).join(', ');
+      }
+      
+      if (errorMessage.includes('Please register before proceeding') || errorMessage.includes('User not found')) {
         toast.error('This mobile number is not registered. Please register first before logging in.');
         // Optionally redirect to registration page
         // navigate('/register');
       } else {
-        toast.error(`Error: ${error.message}`);
+        toast.error(`Error: ${errorMessage}`);
       }
     } finally {
       setIsLoading(false);
